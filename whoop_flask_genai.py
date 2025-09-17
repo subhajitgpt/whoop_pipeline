@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 # --- Config & OpenAI ---
-load_dotenv("C:\\EUacademy\\.env")
+load_dotenv("C:\\Whoop\\.env")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
@@ -372,5 +372,5 @@ def debug():
     }
 
 if __name__ == '__main__':
-    print("WHOOP app on http://127.0.0.1:5059")
-    app.run(host="127.0.0.1", port=5059, debug=True, use_reloader=False)
+    print("WHOOP app on http://127.0.0.1:5054")
+    app.run(host="127.0.0.1", port=5054, debug=True, use_reloader=False)
