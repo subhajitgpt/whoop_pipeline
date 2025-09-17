@@ -1,0 +1,6 @@
+flask
+pandas
+matplotlib
+python-dotenv
+openai
+werkzeug

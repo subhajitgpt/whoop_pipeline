@@ -1,0 +1,14 @@
+[project]
+name = "whoop"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "flask>=3.1.2",
+    "matplotlib>=3.10.6",
+    "openai>=1.107.3",
+    "pandas>=2.3.2",
+    "python-dotenv>=1.1.1",
+    "werkzeug>=3.1.3",
+]
