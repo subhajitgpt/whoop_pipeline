@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 # --- Config & OpenAI ---
-load_dotenv("C:\\Whoop\\.env")
+load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
