@@ -1,0 +1,697 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Workout Analyzer (WHOOP-style) — Pyodide</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <style>
+    body { padding: 20px; background:#f7f9fc; }
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap}
+    .img-box{border:1px solid #e7eef5;border-radius:10px;padding:6px;background:#fff;box-shadow:0 2px 6px rgba(16,24,40,.04)}
+    .viz-img{width:100%;height:100%;object-fit:contain}
+    .card-soft{border:1px solid #e7eef5;box-shadow:0 2px 6px rgba(16,24,40,.04);background:#fff}
+    .section-title{font-weight:700;color:#0f172a}
+    .min-h{min-height:40px}
+
+    .equal-col{display:flex;flex-direction:column}
+    .equal-fill{flex:1 1 auto}
+
+    .metric-chip{font-weight:600;padding:.35rem .6rem;border-radius:999px}
+    .chip-ok{background:#e9f9ef;color:#0f8f3d}
+    .chip-warn{background:#fff6e5;color:#b96a00}
+    .chip-bad{background:#ffe9e9;color:#cc2e2e}
+
+    .progress{height:10px;background:#eef2f7}
+    .bar-ok{background-image:linear-gradient(90deg,#16a34a,#22c55e)}
+    .bar-warn{background-image:linear-gradient(90deg,#FF9800,#FFB74D)}
+    .bar-bad{background-image:linear-gradient(90deg,#ef4444,#f97393)}
+
+    .list-compact .list-group-item{padding:.5rem .75rem;display:flex;justify-content:space-between;align-items:center}
+    .list-compact .badge{font-size:.8rem}
+
+    .spinner { display:inline-block; width:1rem; height:1rem; border:2px solid #cbd5e1; border-top-color:#2563eb; border-radius:50%; animation:spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h3 class="mb-3">🏃 Workout Analyzer (WHOOP-style) — Pyodide</h3>
+
+  <!-- UPLOAD -->
+  <div class="card card-soft mb-3">
+    <div class="card-body">
+      <h5 class="card-title">1) Upload Workout CSV
+        <span id="ctx-badge" class="badge text-bg-secondary ms-2">Context: False</span>
+      </h5>
+      <div class="row g-2 align-items-center">
+        <div class="col-auto"><input id="csvFile" class="form-control" type="file" accept=".csv" required></div>
+        <div class="col-auto"><button id="analyzeBtn" class="btn btn-primary" disabled>Analyze</button></div>
+        <div class="col-auto"><button id="clearBtn" class="btn btn-outline-secondary" disabled>Clear</button></div>
+        <div class="col-auto"><button id="debugBtn" class="btn btn-outline-dark" disabled>Debug</button></div>
+      </div>
+      <div id="error" class="text-danger mt-2 min-h"></div>
+      <div id="status" class="text-secondary small mt-2">🔄 Initializing...</div>
+    </div>
+  </div>
+
+  <!-- METRICS -->
+  <div id="metricsCard" class="card card-soft mb-3 d-none">
+    <div class="card-body">
+      <h3 class="card-title section-title">📊 Workout Metrics</h3>
+
+      <!-- Top visuals -->
+      <div class="row g-3">
+        <div class="col-md-7 equal-col">
+          <h6 class="mb-2">Average Metrics</h6>
+          <div class="img-box equal-fill"><img id="barImg" class="img-fluid" alt="Bar Chart"></div>
+        </div>
+
+        <div class="col-md-5 equal-col">
+          <h6 class="mb-2">Activity & Duration Mix</h6>
+          <div class="row g-3 equal-fill">
+            <div class="col-6">
+              <div class="img-box ratio ratio-1x1">
+                <img id="pieActivityImg" class="viz-img" alt="Activity Mix">
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="img-box ratio ratio-1x1">
+                <img id="pieDurationImg" class="viz-img" alt="Duration Mix">
+              </div>
+            </div>
+
+            <!-- Quick Insights -->
+            <div class="col-12">
+              <div class="img-box p-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <h6 class="mb-0">Quick Insights</h6>
+                  <span id="qi-days" class="badge text-bg-light">— workouts</span>
+                </div>
+                <div class="row g-2">
+                  <div class="col-6">
+                    <div class="small text-secondary">Avg Duration</div>
+                    <div class="d-flex align-items-center gap-2">
+                      <span id="qi-avg-dur" class="fw-bold"></span>
+                      <span id="qi-dur-band" class="metric-chip"></span>
+                    </div>
+                  </div>
+                  <div class="col-6">
+                    <div class="small text-secondary">Avg HR / Max HR</div>
+                    <div class="fw-bold"><span id="qi-hr"></span></div>
+                  </div>
+                  <div class="col-6">
+                    <div class="small text-secondary">Weekly Minutes</div>
+                    <div class="fw-bold"><span id="qi-weekly-min"></span></div>
+                  </div>
+                  <div class="col-6">
+                    <div class="small text-secondary">Most Frequent Activity</div>
+                    <div class="fw-bold"><span id="qi-top-activity"></span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <hr>
+
+      <!-- Weekly goals -->
+      <div class="row g-3">
+        <div class="col-md-4">
+          <div class="card card-soft h-100">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="mb-0">Goal: 150 min / week</h6>
+                <span id="goalMinLbl" class="badge text-bg-light">0%</span>
+              </div>
+              <div class="progress my-2"><div id="goalMinBar" class="bar-warn" style="width:0%"></div></div>
+              <div class="small text-secondary">Last 7 days: <span id="goalMinVal">0</span> min</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card card-soft h-100">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="mb-0">Goal: 4 sessions / week</h6>
+                <span id="goalSessionsLbl" class="badge text-bg-light">0%</span>
+              </div>
+              <div class="progress my-2"><div id="goalSessionsBar" class="bar-warn" style="width:0%"></div></div>
+              <div class="small text-secondary">Last 7 days: <span id="goalSessionsVal">0</span> sessions</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card card-soft h-100">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="mb-0">Goal: 20 km / week</h6>
+                <span id="goalDistLbl" class="badge text-bg-light">N/A</span>
+              </div>
+              <div class="progress my-2"><div id="goalDistBar" class="bar-warn" style="width:0%"></div></div>
+              <div class="small text-secondary">Last 7 days: <span id="goalDistVal">0</span> km</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <hr>
+
+      <!-- Highlights -->
+      <h6 class="mb-2">Highlights</h6>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <div class="card card-soft h-100">
+            <div class="card-body">
+              <h6 class="mb-2">Top 3 Longest Sessions</h6>
+              <div id="bestList" class="list-group list-compact mb-3"></div>
+              <h6 class="mb-2">Top 3 Shortest Sessions</h6>
+              <div id="worstList" class="list-group list-compact"></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="card card-soft h-100">
+            <div class="card-body">
+              <h6 class="mb-2">Raw Tables</h6>
+              <div id="bestTable"></div>
+              <div class="mt-3" id="worstTable"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- CHAT (with OpenAI UI) -->
+  <div class="card card-soft">
+    <div class="card-body">
+      <h5 class="card-title">2) 💬 Chat about your data</h5>
+      <div id="noContext" class="text-secondary">Upload a CSV first for context.</div>
+
+      <div class="row g-2 align-items-end mb-2">
+        <div class="col-md-6">
+          <label class="form-label mb-1">OpenAI API Key</label>
+          <input id="openaiKey" type="password" class="form-control" placeholder="sk-...">
+          <div class="form-text">Stored locally if “Remember” is checked. Prefer a backend proxy in production.</div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label mb-1">Model</label>
+          <select id="openaiModel" class="form-select">
+            <option value="gpt-4o-mini" selected>gpt-4o-mini (fast, affordable)</option>
+            <option value="gpt-4o">gpt-4o (higher quality)</option>
+            <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" id="rememberKey">
+            <label class="form-check-label" for="rememberKey">Remember key on this device</label>
+          </div>
+        </div>
+      </div>
+
+      <textarea id="promptBox" class="form-control mt-2" rows="3" placeholder="Ask about your workout data..."></textarea>
+      <div class="mt-3 d-flex gap-2 align-items-center">
+        <button id="askBtn" class="btn btn-primary" disabled>Ask</button>
+        <span id="askStatus" class="text-secondary small"></span>
+      </div>
+      <hr class="d-none" id="answerHr">
+      <div id="answerDiv" class="d-none"><b>Assistant:</b><pre id="answer" class="mono"></pre></div>
+    </div>
+  </div>
+</div>
+
+<!-- Pyodide -->
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.0/full/pyodide.js" crossorigin="anonymous"></script>
+<script>
+let pyodide = null;
+let isReady = false;
+let contextText = "";
+
+/* ---------- INIT ---------- */
+async function initPyodide() {
+  const status = document.getElementById('status');
+  try {
+    status.textContent = "🔄 Loading Pyodide runtime...";
+    // Important: explicit indexURL so the loader finds the files
+    pyodide = await loadPyodide({
+      indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.0/full/"
+    });
+
+    status.textContent = "📦 Loading packages...";
+    await pyodide.loadPackage(['numpy','pandas','matplotlib']);
+
+    status.textContent = "🔧 Setting up functions...";
+    pyodide.runPython(`
+import io, base64, re
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib import use
+use('Agg')
+
+def plot_to_base64(fig):
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight", dpi=144)
+    buf.seek(0)
+    img_b64 = base64.b64encode(buf.read()).decode("utf-8")
+    plt.close(fig)
+    return img_b64
+
+def bar_chart(data, title=""):
+    fig, ax = plt.subplots(figsize=(8, 6))
+    keys = list(data.keys()); vals = list(data.values())
+    bars = ax.bar(keys, vals, color="#1976D2")
+    ymax = max(vals)*1.2 if max(vals)>0 else 1
+    ax.set_ylim([0, ymax])
+    ax.set_ylabel("Value"); ax.set_title(title, fontsize=16)
+    plt.xticks(rotation=20, fontsize=12)
+    for b in bars:
+        ax.text(b.get_x()+b.get_width()/2, b.get_height()+ymax*0.02,
+                f"{b.get_height():.1f}", ha="center", va="bottom",
+                fontsize=12, fontweight="bold", color="#1976D2",
+                bbox=dict(facecolor="white", edgecolor="#1976D2", boxstyle="round,pad=0.2"))
+    fig.tight_layout()
+    return plot_to_base64(fig)
+
+def donut(labels, sizes, title):
+    fig, ax = plt.subplots(figsize=(8, 6))
+    sizes = np.array(sizes, dtype=float)
+    sizes[np.isnan(sizes)] = 0
+    sizes[sizes < 0] = 0
+    total = sizes.sum()
+    if total == 0: sizes = np.ones_like(sizes); total = sizes.sum()
+    colors = ["#FF9800","#FFE0B2","#FFB74D","#FFCC80","#FFA726","#F57C00","#FB8C00"]
+    explode = [0.08 if s==sizes.max() else 0.03 for s in sizes]
+    wedges, texts, autotexts = ax.pie(
+        sizes, labels=None, autopct=lambda p: f"{p:.1f}%" if p>=5 else "",
+        startangle=120, colors=colors[:len(labels)], explode=explode, shadow=False,
+        wedgeprops=dict(width=0.55, edgecolor="white", linewidth=2),
+        pctdistance=0.78, normalize=True
+    )
+    ax.set_title(title, fontsize=16)
+    ax.axis("equal")
+    fig.tight_layout()
+    return plot_to_base64(fig)
+
+def fmt_num(n, d=1):
+    try:
+        if n is None or np.isnan(n): return "N/A"
+        return f"{float(n):,.{d}f}"
+    except: return "N/A"
+
+def normalize_headers(df):
+    def norm(c):
+        c = c.strip().lower()
+        c = re.sub(r"[^\\w]+", "_", c)
+        c = re.sub(r"_{2,}", "_", c).strip("_")
+        return c
+    df = df.copy(); df.columns = [norm(c) for c in df.columns]; return df
+
+def process_csv(csv_text):
+    df = pd.read_csv(io.StringIO(csv_text))
+    df = normalize_headers(df)
+
+    # Date & type
+    if "workout_start_time" in df.columns:
+        df["_date"] = pd.to_datetime(df["workout_start_time"], errors="coerce")
+    elif "cycle_start_time" in df.columns:
+        df["_date"] = pd.to_datetime(df["cycle_start_time"], errors="coerce")
+    else:
+        raise ValueError("CSV must include 'Workout start time' or 'Cycle start time'.")
+    df["_type"] = df["activity_name"] if "activity_name" in df.columns else "Workout"
+
+    # Duration
+    if "duration_min" in df.columns:
+        df["_duration_min"] = pd.to_numeric(df["duration_min"], errors="coerce")
+    elif "duration" in df.columns:
+        df["_duration_min"] = pd.to_numeric(df["duration"], errors="coerce")
+    else:
+        raise ValueError("CSV must include 'Duration (min)' column.")
+
+    # Optional metrics
+    df["_avg_hr"] = pd.to_numeric(df.get("average_hr_bpm", np.nan), errors="coerce")
+    df["_max_hr"] = pd.to_numeric(df.get("max_hr_bpm", np.nan), errors="coerce")
+    df["_calories"] = pd.to_numeric(df.get("energy_burned_cal", np.nan), errors="coerce")
+    df["_strain"] = pd.to_numeric(df.get("activity_strain", np.nan), errors="coerce")
+
+    # Distance
+    if "distance_meters" in df.columns:
+        df["_distance_km"] = pd.to_numeric(df["distance_meters"], errors="coerce") / 1000.0
+    else:
+        df["_distance_km"] = np.nan
+
+    df = df.sort_values("_date").reset_index(drop=True)
+    total_rows = len(df)
+
+    # Aggregations
+    agg = {}
+    agg["duration_min_mean"] = float(df["_duration_min"].mean()) if total_rows > 0 else 0.0
+    dm = df["_distance_km"].mean(); agg["distance_km_mean"] = float(dm) if not pd.isna(dm) else None
+    ah = df["_avg_hr"].mean(); agg["avg_hr_mean"] = float(ah) if not pd.isna(ah) else None
+    mh = df["_max_hr"].mean(); agg["max_hr_mean"] = float(mh) if not pd.isna(mh) else None
+    cal = df["_calories"].mean(); agg["calories_mean"] = float(cal) if not pd.isna(cal) else None
+    st = df["_strain"].mean(); agg["strain_mean"] = float(st) if not pd.isna(st) else None
+
+    # Last 7 days
+    if total_rows>0 and not df["_date"].isna().all():
+        end = df["_date"].max()
+        start = end - pd.Timedelta(days=6)
+        mask = (df["_date"] >= start) & (df["_date"] <= end)
+        last7 = df.loc[mask]
+        agg["weekly_minutes"] = float(last7["_duration_min"].sum())
+        agg["weekly_distance_km"] = float(last7["_distance_km"].sum()) if not last7["_distance_km"].isna().all() else 0.0
+        agg["weekly_sessions"] = int((~last7["_date"].isna()).sum())
+    else:
+        agg["weekly_minutes"] = 0.0; agg["weekly_distance_km"] = 0.0; agg["weekly_sessions"] = 0
+
+    # Activity & duration mix
+    by_type = df["_type"].value_counts().to_dict()
+    short = int((df["_duration_min"] < 30).sum())
+    medium = int(((df["_duration_min"] >= 30) & (df["_duration_min"] < 60)).sum())
+    long = int((df["_duration_min"] >= 60).sum())
+    duration_mix = {"<30m": short, "30–59m": medium, "≥60m": long}
+
+    # Most frequent activity
+    top_activity = max(by_type.items(), key=lambda kv: kv[1])[0] if by_type else None
+    top_count = by_type.get(top_activity, 0) if top_activity else 0
+
+    # Charts
+    averages = {
+        "Dur (min)": round(agg["duration_min_mean"],2) if agg["duration_min_mean"] else 0,
+        "Dist (km)": round(agg["distance_km_mean"],2) if agg.get("distance_km_mean") else 0,
+        "Avg HR": round(agg["avg_hr_mean"],1) if agg.get("avg_hr_mean") else 0,
+        "Max HR": round(agg["max_hr_mean"],1) if agg.get("max_hr_mean") else 0,
+        "Calories": round(agg["calories_mean"],0) if agg.get("calories_mean") else 0,
+        "Strain": round(agg["strain_mean"],1) if agg.get("strain_mean") else 0,
+    }
+    bar_b64 = bar_chart(averages, "Average Key Workout Metrics")
+    pie_activity_b64 = donut(list(by_type.keys()), list(by_type.values()), "Activity Mix") if by_type else None
+    pie_duration_b64 = donut(list(duration_mix.keys()), list(duration_mix.values()), "Duration Mix")
+
+    # Tables & JSON lists
+    if total_rows >= 3:
+        top_long = df.nlargest(3, "_duration_min")[["_date","_type","_duration_min"]]
+        low_long = df.nsmallest(3, "_duration_min")[["_date","_type","_duration_min"]]
+    else:
+        top_long = df.nlargest(total_rows, "_duration_min")[["_date","_type","_duration_min"]]
+        low_long = df.nsmallest(total_rows, "_duration_min")[["_date","_type","_duration_min"]]
+    best_html = top_long.rename(columns={"_date":"Date","_type":"Activity","_duration_min":"Minutes"}).to_html(index=False, escape=False, classes="table table-sm")
+    worst_html = low_long.rename(columns={"_date":"Date","_type":"Activity","_duration_min":"Minutes"}).to_html(index=False, escape=False, classes="table table-sm")
+    best_json = top_long.rename(columns={"_date":"Date","_type":"Activity","_duration_min":"Minutes"}).to_json(orient="records")
+    worst_json = low_long.rename(columns={"_date":"Date","_type":"Activity","_duration_min":"Minutes"}).to_json(orient="records")
+
+    # Context string
+    lines = [
+        f"Rows (workouts): {len(df)}",
+        f"Avg Duration (min): {fmt_num(agg['duration_min_mean'],2)}",
+        f"Avg Distance (km): {fmt_num(agg.get('distance_km_mean'),2)}",
+        f"Avg HR (bpm): {fmt_num(agg.get('avg_hr_mean'),1)} | Max HR (bpm): {fmt_num(agg.get('max_hr_mean'),1)}",
+        f"Avg Strain: {fmt_num(agg.get('strain_mean'),1)} | Avg Calories: {fmt_num(agg.get('calories_mean'),0)}",
+        f"Weekly Volume (min): {fmt_num(agg['weekly_minutes'],1)} | Weekly Distance (km): {fmt_num(agg.get('weekly_distance_km'),1)} | Weekly Sessions: {agg['weekly_sessions']}",
+        "Mix by activity: " + ", ".join([f"{k}={v}" for k,v in by_type.items()])
+    ]
+    context = "\\n".join(lines)
+
+    return {
+        "agg": agg,
+        "bar_chart": bar_b64,
+        "pie_activity": pie_activity_b64,
+        "pie_duration": pie_duration_b64,
+        "best_html": best_html, "worst_html": worst_html,
+        "best_json": best_json, "worst_json": worst_json,
+        "top_activity": top_activity, "top_count": int(top_count),
+        "total_rows": int(len(df)),
+        "context": context
+    }
+
+def coach_response(context, prompt):
+    if not prompt.strip():
+        return "Please ask me something about your workout data!"
+    lines = [
+        "🏃 WORKOUT COACHING INSIGHTS:",
+        "",
+        "💡 KEY RECOMMENDATIONS:",
+        "• Keep weekly volume within ±15% of current average",
+        "• Alternate high and low intensity days",
+        "• Include 1–2 complete rest days per week",
+        "• Progress distance/duration gradually (≈10% rule)",
+        "",
+        "📊 YOUR DATA SUMMARY:",
+        context[:400] + ("..." if len(context) > 400 else ""),
+        "",
+        "🎯 Ask about: plans, recovery, pacing, or progression."
+    ]
+    return "\\n".join(lines)
+
+print("✅ Python setup complete!")
+    `);
+
+    status.textContent = "✅ Ready to analyze!";
+    status.className = "text-success small mt-2";
+    isReady = true;
+
+    document.getElementById('analyzeBtn').disabled = false;
+    document.getElementById('clearBtn').disabled = false;
+    document.getElementById('debugBtn').disabled = false;
+    document.getElementById('askBtn').disabled = false;
+
+    // Load saved API key
+    const savedKey = localStorage.getItem('openai_api_key');
+    if (savedKey) {
+      document.getElementById('openaiKey').value = savedKey;
+      document.getElementById('rememberKey').checked = true;
+    }
+
+  } catch (error) {
+    status.textContent = "❌ Failed to initialize: " + (error?.message || error);
+    status.className = "text-danger small mt-2";
+    document.getElementById('error').textContent =
+      "Tip: serve over http(s), not file://; ensure CDN access; check console for blocked .wasm/.data files.";
+    console.error("Init error:", error);
+  }
+}
+
+/* ---------- Helpers ---------- */
+function barClassByPct(p){ if(p>=100) return "bar-ok"; if(p>=60) return "bar-warn"; return "bar-bad"; }
+function toList(items, badgeClass){
+  const wrap = document.createElement('div'); wrap.className='list-group list-compact';
+  items.forEach(it=>{
+    const item = document.createElement('div'); item.className='list-group-item';
+    const date = (it.Date || '').toString();
+    const act  = (it.Activity || '—').toString();
+    const mins = (it.Minutes != null) ? Number(it.Minutes).toFixed(0) : '—';
+    item.innerHTML = `<span class="text-truncate" style="max-width:60%">${date} — ${act}</span>
+                      <span class="badge ${badgeClass}">${mins} min</span>`;
+    wrap.appendChild(item);
+  });
+  return wrap;
+}
+
+/* ---------- Process CSV ---------- */
+async function analyzeCsv(csvText) {
+  const status = document.getElementById('status');
+  try {
+    status.textContent = "🔄 Processing...";
+    document.getElementById('error').textContent = "";
+
+    const result = pyodide.runPython(`process_csv("""${csvText.replace(/"/g,'\\"')}""")`);
+    const data = result.toJs({dict_hook:Object});
+
+    contextText = data.context || "";
+
+    // Charts
+    if (data.bar_chart) document.getElementById('barImg').src = "data:image/png;base64," + data.bar_chart;
+    if (data.pie_activity) document.getElementById('pieActivityImg').src = "data:image/png;base64," + data.pie_activity;
+    if (data.pie_duration) document.getElementById('pieDurationImg').src = "data:image/png;base64," + data.pie_duration;
+
+    // Quick insights
+    const agg = data.agg || {};
+    document.getElementById('qi-days').textContent = `${data.total_rows || 0} workouts`;
+    document.getElementById('qi-avg-dur').textContent = `${(agg.duration_min_mean||0).toFixed(1)} min`;
+    const durChip = document.getElementById('qi-dur-band');
+    const durVal = agg.duration_min_mean || 0;
+    durChip.textContent = durVal>=60 ? "long" : durVal>=30 ? "moderate" : "short";
+    durChip.className = `metric-chip ${ durVal>=60 ? 'chip-ok' : durVal>=30 ? 'chip-warn' : 'chip-bad' }`;
+    const hrStr = `${agg.avg_hr_mean ? agg.avg_hr_mean.toFixed(0) : '—'} / ${agg.max_hr_mean ? agg.max_hr_mean.toFixed(0) : '—'} bpm`;
+    document.getElementById('qi-hr').textContent = hrStr;
+    document.getElementById('qi-weekly-min').textContent = `${(agg.weekly_minutes||0).toFixed(0)} min`;
+    const topAct = (data.top_activity ? `${data.top_activity} (${data.top_count})` : '—');
+    document.getElementById('qi-top-activity').textContent = topAct;
+
+    // Weekly goals
+    const goalMin = 150, goalSessions = 4, goalDist = 20;
+    const gMinVal = Math.round(agg.weekly_minutes||0);
+    const gMinPct = Math.min(100, Math.round((gMinVal/goalMin)*100));
+    document.getElementById('goalMinLbl').textContent = `${gMinPct}%`;
+    const minBar = document.getElementById('goalMinBar');
+    minBar.style.width = gMinPct + '%'; minBar.className = barClassByPct(gMinPct);
+    document.getElementById('goalMinVal').textContent = gMinVal;
+
+    const gSesVal = agg.weekly_sessions||0;
+    const gSesPct = Math.min(100, Math.round((gSesVal/goalSessions)*100));
+    document.getElementById('goalSessionsLbl').textContent = `${gSesPct}%`;
+    const sesBar = document.getElementById('goalSessionsBar');
+    sesBar.style.width = gSesPct + '%'; sesBar.className = barClassByPct(gSesPct);
+    document.getElementById('goalSessionsVal').textContent = gSesVal;
+
+    const gDistVal = Number(agg.weekly_distance_km||0);
+    const gDistPct = Math.min(100, Math.round((gDistVal/goalDist)*100));
+    document.getElementById('goalDistLbl').textContent = isNaN(gDistVal) ? 'N/A' : `${gDistPct}%`;
+    const distBar = document.getElementById('goalDistBar');
+    distBar.style.width = isNaN(gDistVal) ? '0%' : (gDistPct + '%'); distBar.className = barClassByPct(gDistPct);
+    document.getElementById('goalDistVal').textContent = isNaN(gDistVal) ? 'N/A' : gDistVal.toFixed(1);
+
+    // Tables and pretty lists
+    document.getElementById('bestTable').innerHTML = data.best_html || "<p>No data</p>";
+    document.getElementById('worstTable').innerHTML = data.worst_html || "<p>No data</p>";
+    const bestArr = JSON.parse(data.best_json || "[]");
+    const worstArr = JSON.parse(data.worst_json || "[]");
+    const bestList = toList(bestArr, 'text-bg-success');
+    const worstList = toList(worstArr, 'text-bg-danger');
+    const bestWrap = document.getElementById('bestList'); bestWrap.innerHTML=''; bestWrap.appendChild(bestList);
+    const worstWrap = document.getElementById('worstList'); worstWrap.innerHTML=''; worstWrap.appendChild(worstList);
+
+    // Reveal
+    document.getElementById('metricsCard').classList.remove('d-none');
+    document.getElementById('noContext').style.display = 'none';
+    document.getElementById('ctx-badge').className = "badge text-bg-success ms-2";
+    document.getElementById('ctx-badge').textContent = "Context: Ready";
+
+    status.textContent = "✅ Analysis complete!";
+    status.className = "text-success small mt-2";
+  } catch (error) {
+    document.getElementById('error').textContent = "Error: " + error.message;
+    status.textContent = "❌ Processing failed";
+    status.className = "text-danger small mt-2";
+    console.error("Processing error:", error);
+  }
+}
+
+/* ---------- OpenAI Chat ---------- */
+async function callOpenAI({apiKey, model, userPrompt, context}) {
+  const askStatus = document.getElementById('askStatus');
+  askStatus.innerHTML = `<span class="spinner"></span> contacting OpenAI…`;
+
+  const system = `You are a helpful workout coach. Use the provided workout summary context to answer with clear, specific actions. Avoid medical diagnoses. Context: """${context}"""`;
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + apiKey
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: userPrompt }
+      ],
+      temperature: 0.7
+    })
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`OpenAI error ${res.status}: ${text}`);
+  }
+
+  const data = await res.json();
+  askStatus.textContent = "✅";
+  return data.choices?.[0]?.message?.content ?? "(no content)";
+}
+
+/* ---------- Events ---------- */
+document.getElementById('analyzeBtn').addEventListener('click', async () => {
+  if (!isReady) { document.getElementById('error').textContent = "Please wait for initialization to complete."; return; }
+  const file = document.getElementById('csvFile').files[0];
+  if (!file) { document.getElementById('error').textContent = "Please select a CSV file."; return; }
+  try { const text = await file.text(); await analyzeCsv(text); }
+  catch (err) { document.getElementById('error').textContent = "File error: " + err.message; }
+});
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  contextText = "";
+  document.getElementById('metricsCard').classList.add('d-none');
+  document.getElementById('noContext').style.display = 'block';
+  document.getElementById('ctx-badge').className = "badge text-bg-secondary ms-2";
+  document.getElementById('ctx-badge').textContent = "Context: False";
+  document.getElementById('error').textContent = "";
+  document.getElementById('answer').textContent = "";
+  document.getElementById('answerDiv').classList.add('d-none');
+  document.getElementById('answerHr').classList.add('d-none');
+  document.getElementById('csvFile').value = "";
+  document.getElementById('status').textContent = "✅ Ready to analyze!";
+  document.getElementById('askStatus').textContent = "";
+});
+
+document.getElementById('debugBtn').addEventListener('click', () => {
+  const info = { ready:isReady, has_context:!!contextText, context_length:contextText.length };
+  alert(JSON.stringify(info, null, 2));
+});
+
+document.getElementById('askBtn').addEventListener('click', async () => {
+  if (!contextText) { document.getElementById('error').textContent = "Upload a CSV first."; return; }
+  const prompt = document.getElementById('promptBox').value.trim();
+  const key = document.getElementById('openaiKey').value.trim();
+  const model = document.getElementById('openaiModel').value;
+
+  if (!prompt) { document.getElementById('error').textContent = "Enter a question."; return; }
+
+  try {
+    document.getElementById('error').textContent = "";
+
+    // Compact context from widgets
+    const qi = {
+      days: document.getElementById('qi-days').textContent,
+      avgDur: document.getElementById('qi-avg-dur').textContent,
+      hr: document.getElementById('qi-hr').textContent,
+      weeklyMin: document.getElementById('qi-weekly-min').textContent,
+      topAct: document.getElementById('qi-top-activity').textContent
+    };
+    const goalMin = document.getElementById('goalMinVal').textContent;
+    const goalSes = document.getElementById('goalSessionsVal').textContent;
+    const goalDist = document.getElementById('goalDistVal').textContent;
+    const widgetContext = `Workouts=${qi.days}; AvgDuration=${qi.avgDur}; HR=${qi.hr}; WeeklyMinutes=${qi.weeklyMin}; TopActivity=${qi.topAct}; Last7d: minutes=${goalMin}, sessions=${goalSes}, distance_km=${goalDist}.`;
+    const fullContext = contextText + "\\n" + widgetContext;
+
+    // Remember key toggle
+    if (document.getElementById('rememberKey').checked && key) {
+      localStorage.setItem('openai_api_key', key);
+    } else {
+      localStorage.removeItem('openai_api_key');
+    }
+
+    let reply = "";
+    if (key) {
+      reply = await callOpenAI({
+        apiKey: key,
+        model,
+        userPrompt: `${prompt}\n\nUse this workout context:\n${widgetContext}`,
+        context: fullContext
+      });
+    } else {
+      // local fallback (no network)
+      reply = pyodide.runPython(`coach_response("""${fullContext.replace(/"/g,'\\"')}""", """${prompt.replace(/"/g,'\\"')}""")`);
+    }
+
+    document.getElementById('answerHr').classList.remove('d-none');
+    document.getElementById('answerDiv').classList.remove('d-none');
+    document.getElementById('answer').textContent = reply;
+
+  } catch (e) {
+    document.getElementById('askStatus').textContent = "";
+    document.getElementById('error').textContent = "🤖 Chat error: " + e.message;
+    console.error(e);
+  }
+});
+
+document.addEventListener('DOMContentLoaded', initPyodide);
+</script>
+</body>
+</html>
