@@ -27,8 +27,9 @@
     .bar-warn{background-image:linear-gradient(90deg,#FF9800,#FFB74D)}
     .bar-bad{background-image:linear-gradient(90deg,#ef4444,#f97393)}
 
-    .list-compact .list-group-item{padding:.5rem .75rem;display:flex;justify-content:space-between;align-items:center}
-    .list-compact .badge{font-size:.8rem}
+    .list-compact .list-group-item{padding:.5rem .75rem;display:flex;justify-content:space-between;align-items:center;gap:.75rem}
+    .list-compact .list-group-item span:first-child{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .list-compact .badge{font-size:.8rem;min-width:84px;text-align:right}
 
     .spinner { display:inline-block; width:1rem; height:1rem; border:2px solid #cbd5e1; border-top-color:#2563eb; border-radius:50%; animation:spin .8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -72,7 +73,7 @@
           <div class="row g-3 equal-fill">
             <div class="col-6">
               <div class="img-box ratio ratio-1x1">
-                <img id="pieActivityImg" class="viz-img" alt="Activity Mix">
+                <img id="pieActivityImg" class="viz-img" alt="Activity Mix (with labels)">
               </div>
             </div>
             <div class="col-6">
@@ -173,12 +174,13 @@
             </div>
           </div>
         </div>
+
+        <!-- RIGHT: replaced raw tables with HR zones list -->
         <div class="col-md-6">
           <div class="card card-soft h-100">
             <div class="card-body">
-              <h6 class="mb-2">Raw Tables</h6>
-              <div id="bestTable"></div>
-              <div class="mt-3" id="worstTable"></div>
+              <h6 class="mb-2">Top HR Zones by Activity</h6>
+              <div id="hrZonesList" class="list-group list-compact"></div>
             </div>
           </div>
         </div>
@@ -238,10 +240,7 @@ async function initPyodide() {
   const status = document.getElementById('status');
   try {
     status.textContent = "🔄 Loading Pyodide runtime...";
-    // Important: explicit indexURL so the loader finds the files
-    pyodide = await loadPyodide({
-      indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.0/full/"
-    });
+    pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.0/full/" });
 
     status.textContent = "📦 Loading packages...";
     await pyodide.loadPackage(['numpy','pandas','matplotlib']);
@@ -280,19 +279,30 @@ def bar_chart(data, title=""):
     return plot_to_base64(fig)
 
 def donut(labels, sizes, title):
+    # Show labels + percentages on the wedges (with threshold)
     fig, ax = plt.subplots(figsize=(8, 6))
     sizes = np.array(sizes, dtype=float)
     sizes[np.isnan(sizes)] = 0
     sizes[sizes < 0] = 0
     total = sizes.sum()
     if total == 0: sizes = np.ones_like(sizes); total = sizes.sum()
-    colors = ["#FF9800","#FFE0B2","#FFB74D","#FFCC80","#FFA726","#F57C00","#FB8C00"]
+    colors = ["#FF9800","#FFE0B2","#FFB74D","#FFCC80","#FFA726","#F57C00","#FB8C00","#FECBA1"]
     explode = [0.08 if s==sizes.max() else 0.03 for s in sizes]
+
+    def pct_fmt(p):
+        return f"{p:.1f}%" if p >= 5 else ""
+
     wedges, texts, autotexts = ax.pie(
-        sizes, labels=None, autopct=lambda p: f"{p:.1f}%" if p>=5 else "",
-        startangle=120, colors=colors[:len(labels)], explode=explode, shadow=False,
+        sizes,
+        labels=labels,                      # <<< labels now shown
+        autopct=pct_fmt,
+        startangle=120,
+        colors=colors[:len(labels)],
+        explode=explode,
         wedgeprops=dict(width=0.55, edgecolor="white", linewidth=2),
-        pctdistance=0.78, normalize=True
+        pctdistance=0.78,
+        textprops=dict(color="#111", fontsize=11, fontweight="bold"),
+        normalize=True
     )
     ax.set_title(title, fontsize=16)
     ax.axis("equal")
@@ -313,6 +323,16 @@ def normalize_headers(df):
         return c
     df = df.copy(); df.columns = [norm(c) for c in df.columns]; return df
 
+def hr_zone_from_avg(avg_hr):
+    # Simple, generic zones by average HR (bpm)
+    if pd.isna(avg_hr): return "Unknown"
+    v = float(avg_hr)
+    if v < 100: return "Z1 (Very Easy)"
+    if v < 120: return "Z2 (Easy)"
+    if v < 140: return "Z3 (Moderate)"
+    if v < 160: return "Z4 (Hard)"
+    return "Z5 (Very Hard)"
+
 def process_csv(csv_text):
     df = pd.read_csv(io.StringIO(csv_text))
     df = normalize_headers(df)
@@ -324,6 +344,7 @@ def process_csv(csv_text):
         df["_date"] = pd.to_datetime(df["cycle_start_time"], errors="coerce")
     else:
         raise ValueError("CSV must include 'Workout start time' or 'Cycle start time'.")
+
     df["_type"] = df["activity_name"] if "activity_name" in df.columns else "Workout"
 
     # Duration
@@ -381,7 +402,7 @@ def process_csv(csv_text):
     top_activity = max(by_type.items(), key=lambda kv: kv[1])[0] if by_type else None
     top_count = by_type.get(top_activity, 0) if top_activity else 0
 
-    # Charts
+    # Charts (Activity chart now includes labels)
     averages = {
         "Dur (min)": round(agg["duration_min_mean"],2) if agg["duration_min_mean"] else 0,
         "Dist (km)": round(agg["distance_km_mean"],2) if agg.get("distance_km_mean") else 0,
@@ -394,17 +415,32 @@ def process_csv(csv_text):
     pie_activity_b64 = donut(list(by_type.keys()), list(by_type.values()), "Activity Mix") if by_type else None
     pie_duration_b64 = donut(list(duration_mix.keys()), list(duration_mix.values()), "Duration Mix")
 
-    # Tables & JSON lists
+    # Longest / shortest
     if total_rows >= 3:
         top_long = df.nlargest(3, "_duration_min")[["_date","_type","_duration_min"]]
         low_long = df.nsmallest(3, "_duration_min")[["_date","_type","_duration_min"]]
     else:
         top_long = df.nlargest(total_rows, "_duration_min")[["_date","_type","_duration_min"]]
         low_long = df.nsmallest(total_rows, "_duration_min")[["_date","_type","_duration_min"]]
-    best_html = top_long.rename(columns={"_date":"Date","_type":"Activity","_duration_min":"Minutes"}).to_html(index=False, escape=False, classes="table table-sm")
-    worst_html = low_long.rename(columns={"_date":"Date","_type":"Activity","_duration_min":"Minutes"}).to_html(index=False, escape=False, classes="table table-sm")
     best_json = top_long.rename(columns={"_date":"Date","_type":"Activity","_duration_min":"Minutes"}).to_json(orient="records")
     worst_json = low_long.rename(columns={"_date":"Date","_type":"Activity","_duration_min":"Minutes"}).to_json(orient="records")
+
+    # ---- NEW: Top 5 HR zones by activity (ranked by avg HR) ----
+    hr_group = df.groupby("_type").agg(
+        avg_hr_mean=("_avg_hr","mean"),
+        total_minutes=("_duration_min","sum"),
+        sessions=("_avg_hr","count")
+    ).reset_index()
+    hr_group["zone"] = hr_group["avg_hr_mean"].apply(hr_zone_from_avg)
+    hr_group = hr_group.dropna(subset=["avg_hr_mean"]).sort_values("avg_hr_mean", ascending=False).head(8)
+
+    hr_zones_json = hr_group.rename(columns={
+        "_type":"Activity",
+        "avg_hr_mean":"AvgHR",
+        "total_minutes":"Minutes",
+        "sessions":"Sessions",
+        "zone":"Zone"
+    }).to_json(orient="records")
 
     # Context string
     lines = [
@@ -423,8 +459,8 @@ def process_csv(csv_text):
         "bar_chart": bar_b64,
         "pie_activity": pie_activity_b64,
         "pie_duration": pie_duration_b64,
-        "best_html": best_html, "worst_html": worst_html,
         "best_json": best_json, "worst_json": worst_json,
+        "hr_zones_json": hr_zones_json,
         "top_activity": top_activity, "top_count": int(top_count),
         "total_rows": int(len(df)),
         "context": context
@@ -461,7 +497,6 @@ print("✅ Python setup complete!")
     document.getElementById('debugBtn').disabled = false;
     document.getElementById('askBtn').disabled = false;
 
-    // Load saved API key
     const savedKey = localStorage.getItem('openai_api_key');
     if (savedKey) {
       document.getElementById('openaiKey').value = savedKey;
@@ -490,6 +525,23 @@ function toList(items, badgeClass){
                       <span class="badge ${badgeClass}">${mins} min</span>`;
     wrap.appendChild(item);
   });
+  return wrap;
+}
+
+function toHrZonesList(items){
+  const wrap = document.createElement('div'); wrap.className='list-group list-compact';
+  items.forEach(it=>{
+    const act = (it.Activity || '—').toString();
+    const zone = (it.Zone || 'Unknown').toString();
+    const avg = (it.AvgHR != null) ? Number(it.AvgHR).toFixed(0) : '—';
+    const mins = (it.Minutes != null) ? Number(it.Minutes).toFixed(0) : '0';
+    const subtitle = `${zone} • ${mins} min`;
+    const item = document.createElement('div'); item.className='list-group-item';
+    item.innerHTML = `<span class="text-truncate" style="max-width:60%">${act} — <span class="text-secondary">${subtitle}</span></span>
+                      <span class="badge text-bg-primary">${avg} bpm</span>`;
+    wrap.appendChild(item);
+  });
+  if (!items.length) wrap.innerHTML = '<div class="text-secondary small"><i>No HR data available.</i></div>';
   return wrap;
 }
 
@@ -547,15 +599,18 @@ async function analyzeCsv(csvText) {
     distBar.style.width = isNaN(gDistVal) ? '0%' : (gDistPct + '%'); distBar.className = barClassByPct(gDistPct);
     document.getElementById('goalDistVal').textContent = isNaN(gDistVal) ? 'N/A' : gDistVal.toFixed(1);
 
-    // Tables and pretty lists
-    document.getElementById('bestTable').innerHTML = data.best_html || "<p>No data</p>";
-    document.getElementById('worstTable').innerHTML = data.worst_html || "<p>No data</p>";
+    // Pretty lists
     const bestArr = JSON.parse(data.best_json || "[]");
     const worstArr = JSON.parse(data.worst_json || "[]");
     const bestList = toList(bestArr, 'text-bg-success');
     const worstList = toList(worstArr, 'text-bg-danger');
     const bestWrap = document.getElementById('bestList'); bestWrap.innerHTML=''; bestWrap.appendChild(bestList);
     const worstWrap = document.getElementById('worstList'); worstWrap.innerHTML=''; worstWrap.appendChild(worstList);
+
+    // HR zones list (new)
+    const zonesArr = JSON.parse(data.hr_zones_json || "[]");
+    const zonesWrap = document.getElementById('hrZonesList'); zonesWrap.innerHTML='';
+    zonesWrap.appendChild(toHrZonesList(zonesArr));
 
     // Reveal
     document.getElementById('metricsCard').classList.remove('d-none');
@@ -646,7 +701,6 @@ document.getElementById('askBtn').addEventListener('click', async () => {
   try {
     document.getElementById('error').textContent = "";
 
-    // Compact context from widgets
     const qi = {
       days: document.getElementById('qi-days').textContent,
       avgDur: document.getElementById('qi-avg-dur').textContent,
@@ -660,7 +714,6 @@ document.getElementById('askBtn').addEventListener('click', async () => {
     const widgetContext = `Workouts=${qi.days}; AvgDuration=${qi.avgDur}; HR=${qi.hr}; WeeklyMinutes=${qi.weeklyMin}; TopActivity=${qi.topAct}; Last7d: minutes=${goalMin}, sessions=${goalSes}, distance_km=${goalDist}.`;
     const fullContext = contextText + "\\n" + widgetContext;
 
-    // Remember key toggle
     if (document.getElementById('rememberKey').checked && key) {
       localStorage.setItem('openai_api_key', key);
     } else {
@@ -676,7 +729,6 @@ document.getElementById('askBtn').addEventListener('click', async () => {
         context: fullContext
       });
     } else {
-      // local fallback (no network)
       reply = pyodide.runPython(`coach_response("""${fullContext.replace(/"/g,'\\"')}""", """${prompt.replace(/"/g,'\\"')}""")`);
     }
 
