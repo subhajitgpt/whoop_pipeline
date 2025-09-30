@@ -26,8 +26,25 @@
     .progress-bar.ok   { background-image: linear-gradient(90deg, #16a34a, #22c55e); }
     .progress-bar.bad  { background-image: linear-gradient(90deg, #ef4444, #f97393); }
 
-    .list-compact .list-group-item { padding: .5rem .75rem; display: flex; justify-content: space-between; align-items: center; }
-    .list-compact .badge { font-size: .8rem; }
+    .list-compact .list-group-item{
+      padding:.5rem .75rem;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:.75rem;
+    }
+    .list-compact .list-group-item span:first-child{
+      flex:1 1 auto;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    /* Fixed badge width so numbers align in a column */
+    .list-compact .badge{
+      font-size:.8rem;
+      min-width: 72px;
+      text-align:right;
+    }
 
     .equal-col { display:flex; flex-direction:column; }
     .equal-fill { flex:1 1 auto; }
@@ -192,18 +209,21 @@
             <div class="card-body">
               <h6 class="mb-2">Top 3 Best Recovery Days</h6>
               <div id="bestRecovery" class="list-group list-compact mb-3"></div>
-              <h6 class="mb-2">Top 3 Worst Recovery Days</h6>
+              <h6 class="mb-2">Top 5 Worst Recovery Days</h6>
               <div id="worstRecovery" class="list-group list-compact"></div>
             </div>
           </div>
         </div>
+
+        <!-- NEW: Sleep Debt lists -->
         <div class="col-md-6">
           <div class="card card-soft h-100">
             <div class="card-body">
-              <h6 class="mb-2">Top 3 Highest Sleep Debt Days</h6>
-              <div id="highestSleepDebt" class="list-group list-compact mb-3"></div>
               <h6 class="mb-2">Top 3 Lowest Sleep Debt Days</h6>
-              <div id="lowestSleepDebt" class="list-group list-compact"></div>
+              <div id="lowestSleepDebt" class="list-group list-compact mb-3"></div>
+
+              <h6 class="mb-2">Top 5 Highest Sleep Debt Days</h6>
+              <div id="highestSleepDebt" class="list-group list-compact"></div>
             </div>
           </div>
         </div>
@@ -261,7 +281,7 @@ let pyodide = null;
 let isReady = false;
 let contextText = "";
 
-/* -------- INIT PYODIDE (unchanged core analysis) -------- */
+/* -------- INIT PYODIDE -------- */
 async function initPyodide() {
   const status = document.getElementById('status');
   try {
@@ -347,13 +367,27 @@ def process_whoop_csv(csv_text):
     rec_high = int((df["Recovery_score_%"] >= 80).sum())
     recovery_dist = {"Low": rec_low, "Medium": rec_med, "High": rec_high}
 
+    # ---- Sleep debt calculations for lists & distributions ----
     if "Sleep_debt_(min)" in df:
-        sd_low  = int((df["Sleep_debt_(min)"] < 30).sum())
-        sd_mod  = int(((df["Sleep_debt_(min)"] >= 30) & (df["Sleep_debt_(min)"] < 100)).sum())
-        sd_high = int((df["Sleep_debt_(min)"] >= 100).sum())
+        sd_series = pd.to_numeric(df["Sleep_debt_(min)"], errors="coerce").dropna()
+        sd_low  = int((sd_series < 30).sum())
+        sd_mod  = int(((sd_series >= 30) & (sd_series < 100)).sum())
+        sd_high = int((sd_series >= 100).sum())
         sleep_debt_dist = {"Low": sd_low, "Moderate": sd_mod, "High": sd_high}
+
+        # New: top/bottom lists for Sleep Debt
+        if "Cycle_start_time" in df.columns:
+            ls = df.nsmallest(3, "Sleep_debt_(min)")[["Cycle_start_time","Sleep_debt_(min)"]]
+            hs = df.nlargest(5, "Sleep_debt_(min)")[["Cycle_start_time","Sleep_debt_(min)"]]
+        else:
+            ls = df.nsmallest(3, "Sleep_debt_(min)")[["Sleep_debt_(min)"]]
+            hs = df.nlargest(5, "Sleep_debt_(min)")[["Sleep_debt_(min)"]]
+        lowest_sleep_json = to_json_rows(ls)
+        highest_sleep_json = to_json_rows(hs)
     else:
         sleep_debt_dist = {"Low": 0, "Moderate": 0, "High": 0}
+        lowest_sleep_json = "[]"
+        highest_sleep_json = "[]"
 
     bar_chart = make_bar_chart(averages)
     pie_low_recovery = make_nicer_pie_chart(["Low Recovery (<50)","Normal/High"], [rec_low, total_days-rec_low], "Low Recovery Days")
@@ -361,16 +395,7 @@ def process_whoop_csv(csv_text):
     pie_high_sleep_debt = make_nicer_pie_chart(["High Sleep Debt (>100)","Normal/Low"], [high_sleep_debt_count, total_days-high_sleep_debt_count], "High Sleep Debt Days")
 
     br = df.nlargest(3, "Recovery_score_%")[["Cycle_start_time","Recovery_score_%"]] if "Cycle_start_time" in df.columns else df.nlargest(3, "Recovery_score_%")[["Recovery_score_%"]]
-    wr = df.nsmallest(3, "Recovery_score_%")[["Cycle_start_time","Recovery_score_%"]] if "Cycle_start_time" in df.columns else df.nsmallest(3, "Recovery_score_%")[["Recovery_score_%"]]
-
-    if "Sleep_debt_(min)" in df.columns:
-        hs = df.nlargest(3, "Sleep_debt_(min)")[["Cycle_start_time","Sleep_debt_(min)"]] if "Cycle_start_time" in df.columns else df.nlargest(3, "Sleep_debt_(min)")[["Sleep_debt_(min)"]]
-        ls = df.nsmallest(3, "Sleep_debt_(min)")[["Cycle_start_time","Sleep_debt_(min)"]] if "Cycle_start_time" in df.columns else df.nsmallest(3, "Sleep_debt_(min)")[["Sleep_debt_(min)"]]
-        hs_html = hs.to_html(index=False, classes='table table-sm')
-        ls_html = ls.to_html(index=False, classes='table table-sm')
-    else:
-        hs_html = "<i>Not available</i>"
-        ls_html = "<i>Not available</i>"
+    wr = df.nsmallest(5, "Recovery_score_%")[["Cycle_start_time","Recovery_score_%"]] if "Cycle_start_time" in df.columns else df.nsmallest(5, "Recovery_score_%")[["Recovery_score_%"]]
 
     best_hrv_row = df.loc[df["Heart_rate_variability_(ms)"].idxmax()][["Cycle_start_time","Heart_rate_variability_(ms)"]] if "Cycle_start_time" in df.columns else None
     worst_rest_row = df.loc[df["Resting_heart_rate_(bpm)"].idxmax()][["Cycle_start_time","Resting_heart_rate_(bpm)"]] if "Cycle_start_time" in df.columns else None
@@ -387,8 +412,8 @@ def process_whoop_csv(csv_text):
         "pie_high_sleep_debt": pie_high_sleep_debt,
         "best_recovery_json": to_json_rows(br),
         "worst_recovery_json": to_json_rows(wr),
-        "highest_sleep_debt_html": hs_html,
-        "lowest_sleep_debt_html": ls_html,
+        "lowest_sleep_debt_json": lowest_sleep_json,
+        "highest_sleep_debt_json": highest_sleep_json,
         "notables": {
             "best_hrv": None if best_hrv_row is None else {"when": str(best_hrv_row["Cycle_start_time"]), "value": float(best_hrv_row["Heart_rate_variability_(ms)"])},
             "worst_rest_hr": None if worst_rest_row is None else {"when": str(worst_rest_row["Cycle_start_time"]), "value": float(worst_rest_row["Resting_heart_rate_(bpm)"])},
@@ -404,7 +429,6 @@ def process_whoop_csv(csv_text):
     document.getElementById('debugBtn').disabled = false;
     document.getElementById('askBtn').disabled = false;
 
-    // Load saved key if present
     const saved = localStorage.getItem('openai_api_key');
     if (saved) { document.getElementById('openaiKey').value = saved; document.getElementById('rememberKey').checked = true; }
   } catch (e) {
@@ -484,12 +508,17 @@ async function analyzeWhoopCsv(csvText){
     document.getElementById('sleepModBar').style.width=pct(sd.Moderate||0,sdTotal)+'%';
     document.getElementById('sleepHighBar').style.width=pct(sd.High||0,sdTotal)+'%';
 
+    // Recovery lists
     const bestWrap=document.getElementById('bestRecovery'); bestWrap.innerHTML='';
     bestWrap.appendChild(renderRowsFromJson(data.best_recovery_json,'Recovery_score_%','%','text-bg-success'));
     const worstWrap=document.getElementById('worstRecovery'); worstWrap.innerHTML='';
     worstWrap.appendChild(renderRowsFromJson(data.worst_recovery_json,'Recovery_score_%','%','text-bg-danger'));
-    document.getElementById('highestSleepDebt').innerHTML=data.highest_sleep_debt_html||"<i>Not available</i>";
-    document.getElementById('lowestSleepDebt').innerHTML=data.lowest_sleep_debt_html||"<i>Not available</i>";
+
+    // Sleep debt lists (new)
+    const lowDebtWrap = document.getElementById('lowestSleepDebt'); lowDebtWrap.innerHTML='';
+    const highDebtWrap = document.getElementById('highestSleepDebt'); highDebtWrap.innerHTML='';
+    lowDebtWrap.appendChild(renderRowsFromJson(data.lowest_sleep_debt_json,'Sleep_debt_(min)',' min','text-bg-success'));
+    highDebtWrap.appendChild(renderRowsFromJson(data.highest_sleep_debt_json,'Sleep_debt_(min)',' min','text-bg-danger'));
 
     document.getElementById('metricsCard').classList.remove('d-none');
     document.getElementById('noContext').style.display='none';
@@ -498,7 +527,7 @@ async function analyzeWhoopCsv(csvText){
     status.textContent="✅ Analysis complete!"; status.className="text-success small mt-2";
   }catch(e){
     document.getElementById('error').textContent="❌ Processing error: "+e.message;
-    status.textContent="❌ Processing failed"; status.className="text-danger small mt-2";
+    document.getElementById('status').textContent="❌ Processing failed"; document.getElementById('status').className="text-danger small mt-2";
     console.error(e);
   }
 }
@@ -580,10 +609,8 @@ document.getElementById('askBtn').addEventListener('click', async () => {
   if (!isReady) { document.getElementById('error').textContent = "⏳ Python environment not ready yet."; return; }
   try {
     document.getElementById('error').textContent = "";
-    // Build a compact context string from visible widgets
     const recDist = document.getElementById('recoveryTotal').textContent;
     const sdDist  = document.getElementById('sleepDebtTotal').textContent;
-    // We also have derived context in the Quick Insights card:
     const qi = {
       days: document.getElementById('qi-days').textContent,
       avgRecovery: document.getElementById('qi-avg-recov').textContent,
