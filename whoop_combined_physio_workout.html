@@ -1,0 +1,1078 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Health & Sleep + Workout Analyzer — Pyodide (Tabbed)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <style>
+    body { padding: 20px; background: #f7f9fc; }
+    .monospace,.mono{font-family: ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space: pre-wrap;}
+    .img-box{border:1px solid #e7eef5;border-radius:10px;padding:6px;background:#fff;box-shadow:0 2px 6px rgba(16,24,40,.04)}
+    .viz-img{width:100%;height:100%;object-fit:contain}
+    .card-soft{border:1px solid #e7eef5;box-shadow:0 2px 6px rgba(16,24,40,.04);background:#fff}
+    .section-title{font-weight:700;color:#0f172a}
+    .min-h{min-height:40px}
+    .metric-chip{font-weight:600;padding:.35rem .6rem;border-radius:999px}
+    .metric-chip.primary{background:#e8f1ff;color:#0b63ce}
+    .metric-chip.success{background:#e9f9ef;color:#0f8f3d}
+    .metric-chip.warning{background:#fff6e5;color:#b96a00}
+    .metric-chip.danger{background:#ffe9e9;color:#cc2e2e}
+    .chip-ok{background:#e9f9ef;color:#0f8f3d}
+    .chip-warn{background:#fff6e5;color:#b96a00}
+    .chip-bad{background:#ffe9e9;color:#cc2e2e}
+    .progress{height:10px;background:#eef2f7}
+    .progress-bar{background-image:linear-gradient(90deg,#1976D2,#2F80ED)}
+    .progress-bar.warn{background-image:linear-gradient(90deg,#FF9800,#FFB74D)}
+    .progress-bar.ok{background-image:linear-gradient(90deg,#16a34a,#22c55e)}
+    .progress-bar.bad{background-image:linear-gradient(90deg,#ef4444,#f97393)}
+    .bar-ok{background-image:linear-gradient(90deg,#16a34a,#22c55e)}
+    .bar-warn{background-image:linear-gradient(90deg,#FF9800,#FFB74D)}
+    .bar-bad{background-image:linear-gradient(90deg,#ef4444,#f97393)}
+    .list-compact .list-group-item{padding:.5rem .75rem;display:flex;justify-content:space-between;align-items:center;gap:.75rem}
+    .list-compact .list-group-item span:first-child{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .list-compact .badge{font-size:.8rem;min-width:72px;text-align:right}
+    .equal-col{display:flex;flex-direction:column}
+    .equal-fill{flex:1 1 auto}
+    .spinner{display:inline-block;width:1rem;height:1rem;border:2px solid #cbd5e1;border-top-color:#2563eb;border-radius:50%;animation:spin .8s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+  </style>
+</head>
+<body>
+<div class="container my-3">
+  <h3 class="mb-3">📊 Health & Sleep + 🏃 Workout Analyzer — Pyodide</h3>
+
+  <!-- Tabs -->
+  <ul class="nav nav-tabs" id="toolTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="tab-hsa" data-bs-toggle="tab" data-bs-target="#pane-hsa" type="button" role="tab">
+        🩺 Health & Sleep Analyzer
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-wa" data-bs-toggle="tab" data-bs-target="#pane-wa" type="button" role="tab">
+        🏃 Workout Analyzer
+      </button>
+    </li>
+  </ul>
+
+  <div class="tab-content mt-3">
+
+    <!-- ===================== TAB 1: HEALTH & SLEEP ANALYZER ===================== -->
+    <div class="tab-pane fade show active" id="pane-hsa" role="tabpanel" aria-labelledby="tab-hsa">
+      <div class="card card-soft mb-3">
+        <div class="card-body">
+          <h5 class="card-title">1) Upload WHOOP CSV
+            <span id="hsa-ctx-badge" class="badge text-bg-secondary ms-2">Context: False</span>
+          </h5>
+          <div class="row g-2 align-items-center">
+            <div class="col-auto"><input id="hsa-csvFile" class="form-control" type="file" accept=".csv" required></div>
+            <div class="col-auto"><button id="hsa-analyzeBtn" class="btn btn-primary" disabled>Analyze</button></div>
+            <div class="col-auto"><button id="hsa-clearBtn" class="btn btn-outline-secondary" disabled>Clear context</button></div>
+            <div class="col-auto"><button id="hsa-debugBtn" class="btn btn-outline-dark" disabled>/debug</button></div>
+          </div>
+          <div id="hsa-error" class="text-danger mt-2 min-h"></div>
+          <div id="hsa-status" class="text-secondary small mt-2">🔄 Initializing Python environment...</div>
+        </div>
+      </div>
+
+      <div id="hsa-metricsCard" class="card card-soft mb-3 d-none">
+        <div class="card-body">
+          <h3 class="card-title section-title">Extracted Metrics</h3>
+
+          <div class="row g-3">
+            <div class="col-md-7 equal-col">
+              <h6 class="mb-2">Overall Metrics (Bar Chart)</h6>
+              <div class="img-box equal-fill"><img id="hsa-barChart" class="img-fluid" alt="Average Metrics"></div>
+            </div>
+
+            <div class="col-md-5 equal-col">
+              <h6 class="mb-2">Recovery & Sleep Debt Proportions</h6>
+              <div class="row g-3 equal-fill">
+                <div class="col-6"><div class="img-box ratio ratio-1x1"><img id="hsa-pieRecovery" class="viz-img" alt="Low Recovery Pie"></div></div>
+                <div class="col-6"><div class="img-box ratio ratio-1x1"><img id="hsa-pieSleepDebt" class="viz-img" alt="High Sleep Debt Pie"></div></div>
+                <div class="col-12">
+                  <div class="img-box p-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                      <h6 class="mb-0">Quick Insights</h6>
+                      <span id="hsa-qi-days" class="badge text-bg-light">— days</span>
+                    </div>
+                    <div class="row g-2">
+                      <div class="col-6"><div class="small text-secondary">Avg Recovery</div>
+                        <div class="d-flex align-items-center gap-2">
+                          <span id="hsa-qi-avg-recov" class="fw-bold"></span>
+                          <span id="hsa-qi-recov-band" class="metric-chip"></span>
+                        </div>
+                      </div>
+                      <div class="col-6"><div class="small text-secondary">Avg HRV (ms)</div><div class="fw-bold"><span id="hsa-qi-avg-hrv"></span></div></div>
+                      <div class="col-6"><div class="small text-secondary">% Low Recovery</div><div class="fw-bold"><span id="hsa-qi-lowrecov-pct"></span></div></div>
+                      <div class="col-6"><div class="small text-secondary">% High Sleep Debt</div><div class="fw-bold"><span id="hsa-qi-highdebt-pct"></span></div></div>
+                      <div class="col-12">
+                        <hr class="my-2">
+                        <div class="small text-secondary mb-1">Notable Days</div>
+                        <ul class="small mb-0" id="hsa-qi-notable"></ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <hr>
+
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="card card-soft h-100">
+                <div class="card-body">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0">Recovery Score Distribution</h6>
+                    <span id="hsa-recoveryTotal" class="badge text-bg-light">0 days</span>
+                  </div>
+                  <div class="d-flex justify-content-between"><span class="metric-chip danger">Low &lt;50</span><span id="hsa-recoveryLowLbl" class="fw-semibold">0</span></div>
+                  <div class="progress my-2"><div id="hsa-recoveryLowBar" class="progress-bar bad" style="width:0%"></div></div>
+                  <div class="d-flex justify-content-between mt-2"><span class="metric-chip warning">Medium 50–79</span><span id="hsa-recoveryMedLbl" class="fw-semibold">0</span></div>
+                  <div class="progress my-2"><div id="hsa-recoveryMedBar" class="progress-bar warn" style="width:0%"></div></div>
+                  <div class="d-flex justify-content-between mt-2"><span class="metric-chip success">High ≥80</span><span id="hsa-recoveryHighLbl" class="fw-semibold">0</span></div>
+                  <div class="progress my-2"><div id="hsa-recoveryHighBar" class="progress-bar ok" style="width:0%"></div></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <div class="card card-soft h-100">
+                <div class="card-body">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0">Sleep Debt Distribution</h6>
+                    <span id="hsa-sleepDebtTotal" class="badge text-bg-light">0 days</span>
+                  </div>
+                  <div class="d-flex justify-content-between"><span class="metric-chip success">Low &lt;30 min</span><span id="hsa-sleepLowLbl" class="fw-semibold">0</span></div>
+                  <div class="progress my-2"><div id="hsa-sleepLowBar" class="progress-bar ok" style="width:0%"></div></div>
+                  <div class="d-flex justify-content-between mt-2"><span class="metric-chip warning">Moderate 30–100</span><span id="hsa-sleepModLbl" class="fw-semibold">0</span></div>
+                  <div class="progress my-2"><div id="hsa-sleepModBar" class="progress-bar warn" style="width:0%"></div></div>
+                  <div class="d-flex justify-content-between mt-2"><span class="metric-chip danger">High ≥100</span><span id="hsa-sleepHighLbl" class="fw-semibold">0</span></div>
+                  <div class="progress my-2"><div id="hsa-sleepHighBar" class="progress-bar bad" style="width:0%"></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <hr>
+
+          <h6 class="mb-2">Highlights</h6>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="card card-soft h-100">
+                <div class="card-body">
+                  <h6 class="mb-2">Top 3 Best Recovery Days</h6>
+                  <div id="hsa-bestRecovery" class="list-group list-compact mb-3"></div>
+                  <h6 class="mb-2">Top 5 Worst Recovery Days</h6>
+                  <div id="hsa-worstRecovery" class="list-group list-compact"></div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="card card-soft h-100">
+                <div class="card-body">
+                  <h6 class="mb-2">Top 3 Lowest Sleep Debt Days</h6>
+                  <div id="hsa-lowestSleepDebt" class="list-group list-compact mb-3"></div>
+                  <h6 class="mb-2">Top 5 Highest Sleep Debt Days</h6>
+                  <div id="hsa-highestSleepDebt" class="list-group list-compact"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Chat -->
+      <div class="card card-soft">
+        <div class="card-body">
+          <h5 class="card-title">2) Chat about this data</h5>
+          <div id="hsa-noContext" class="text-secondary">Upload a CSV first to give the assistant context. You can still type a question—I'll remind you.</div>
+
+          <div class="row g-2 align-items-end mb-2">
+            <div class="col-md-6">
+              <label class="form-label mb-1">OpenAI API Key</label>
+              <input id="hsa-openaiKey" type="password" class="form-control" placeholder="sk-...">
+              <div class="form-text">Stored locally in your browser if you click “Remember”. For production, use a backend proxy.</div>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label mb-1">Model</label>
+              <select id="hsa-openaiModel" class="form-select">
+                <option value="gpt-4o-mini" selected>gpt-4o-mini (fast, cheap)</option>
+                <option value="gpt-4o">gpt-4o (best quality)</option>
+                <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <div class="form-check mb-1">
+                <input class="form-check-input" type="checkbox" id="hsa-rememberKey">
+                <label class="form-check-label" for="hsa-rememberKey">Remember key on this device</label>
+              </div>
+            </div>
+          </div>
+
+          <textarea id="hsa-promptBox" class="form-control" rows="4" placeholder="E.g., Suggest a 7-day plan to improve HRV given my averages and bad days."></textarea>
+          <div class="mt-3 d-flex gap-2">
+            <button id="hsa-askBtn" class="btn btn-primary" disabled>Ask</button>
+            <span id="hsa-askStatus" class="text-secondary small"></span>
+          </div>
+          <hr class="d-none" id="hsa-answerHr">
+          <div id="hsa-answerDiv" class="d-none">
+            <div><b>Assistant:</b></div>
+            <pre id="hsa-answer" class="monospace"></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== TAB 2: WORKOUT ANALYZER ===================== -->
+    <div class="tab-pane fade" id="pane-wa" role="tabpanel" aria-labelledby="tab-wa">
+      <div class="card card-soft mb-3">
+        <div class="card-body">
+          <h5 class="card-title">1) Upload Workout CSV
+            <span id="wa-ctx-badge" class="badge text-bg-secondary ms-2">Context: False</span>
+          </h5>
+          <div class="row g-2 align-items-center">
+            <div class="col-auto"><input id="wa-csvFile" class="form-control" type="file" accept=".csv" required></div>
+            <div class="col-auto"><button id="wa-analyzeBtn" class="btn btn-primary" disabled>Analyze</button></div>
+            <div class="col-auto"><button id="wa-clearBtn" class="btn btn-outline-secondary" disabled>Clear</button></div>
+            <div class="col-auto"><button id="wa-debugBtn" class="btn btn-outline-dark" disabled>Debug</button></div>
+          </div>
+          <div id="wa-error" class="text-danger mt-2 min-h"></div>
+          <div id="wa-status" class="text-secondary small mt-2">🔄 Initializing...</div>
+        </div>
+      </div>
+
+      <div id="wa-metricsCard" class="card card-soft mb-3 d-none">
+        <div class="card-body">
+          <h3 class="card-title section-title">📊 Workout Metrics</h3>
+
+          <div class="row g-3">
+            <div class="col-md-7 equal-col">
+              <h6 class="mb-2">Average Metrics</h6>
+              <div class="img-box equal-fill"><img id="wa-barImg" class="img-fluid" alt="Bar Chart"></div>
+            </div>
+            <div class="col-md-5 equal-col">
+              <h6 class="mb-2">Activity & Duration Mix</h6>
+              <div class="row g-3 equal-fill">
+                <div class="col-6"><div class="img-box ratio ratio-1x1"><img id="wa-pieActivityImg" class="viz-img" alt="Activity Mix"></div></div>
+                <div class="col-6"><div class="img-box ratio ratio-1x1"><img id="wa-pieDurationImg" class="viz-img" alt="Duration Mix"></div></div>
+                <div class="col-12">
+                  <div class="img-box p-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                      <h6 class="mb-0">Quick Insights</h6>
+                      <span id="wa-qi-days" class="badge text-bg-light">— workouts</span>
+                    </div>
+                    <div class="row g-2">
+                      <div class="col-6">
+                        <div class="small text-secondary">Avg Duration</div>
+                        <div class="d-flex align-items-center gap-2">
+                          <span id="wa-qi-avg-dur" class="fw-bold"></span>
+                          <span id="wa-qi-dur-band" class="metric-chip"></span>
+                        </div>
+                      </div>
+                      <div class="col-6"><div class="small text-secondary">Avg HR / Max HR</div><div class="fw-bold"><span id="wa-qi-hr"></span></div></div>
+                      <div class="col-6"><div class="small text-secondary">Weekly Minutes</div><div class="fw-bold"><span id="wa-qi-weekly-min"></span></div></div>
+                      <div class="col-6"><div class="small text-secondary">Most Frequent Activity</div><div class="fw-bold"><span id="wa-qi-top-activity"></span></div></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <hr>
+
+          <div class="row g-3">
+            <div class="col-md-4">
+              <div class="card card-soft h-100">
+                <div class="card-body">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0">Goal: 150 min / week</h6>
+                    <span id="wa-goalMinLbl" class="badge text-bg-light">0%</span>
+                  </div>
+                  <div class="progress my-2"><div id="wa-goalMinBar" class="bar-warn" style="width:0%"></div></div>
+                  <div class="small text-secondary">Last 7 days: <span id="wa-goalMinVal">0</span> min</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card card-soft h-100">
+                <div class="card-body">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0">Goal: 4 sessions / week</h6>
+                    <span id="wa-goalSessionsLbl" class="badge text-bg-light">0%</span>
+                  </div>
+                  <div class="progress my-2"><div id="wa-goalSessionsBar" class="bar-warn" style="width:0%"></div></div>
+                  <div class="small text-secondary">Last 7 days: <span id="wa-goalSessionsVal">0</span> sessions</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card card-soft h-100">
+                <div class="card-body">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0">Goal: 20 km / week</h6>
+                    <span id="wa-goalDistLbl" class="badge text-bg-light">N/A</span>
+                  </div>
+                  <div class="progress my-2"><div id="wa-goalDistBar" class="bar-warn" style="width:0%"></div></div>
+                  <div class="small text-secondary">Last 7 days: <span id="wa-goalDistVal">0</span> km</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <hr>
+
+          <h6 class="mb-2">Highlights</h6>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="card card-soft h-100">
+                <div class="card-body">
+                  <h6 class="mb-2">Top 3 Longest Sessions</h6>
+                  <div id="wa-bestList" class="list-group list-compact mb-3"></div>
+                  <h6 class="mb-2">Top 3 Shortest Sessions</h6>
+                  <div id="wa-worstList" class="list-group list-compact"></div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="card card-soft h-100">
+                <div class="card-body">
+                  <h6 class="mb-2">Top HR Zones by Activity</h6>
+                  <div id="wa-hrZonesList" class="list-group list-compact"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Chat -->
+      <div class="card card-soft">
+        <div class="card-body">
+          <h5 class="card-title">2) 💬 Chat about your data</h5>
+          <div id="wa-noContext" class="text-secondary">Upload a CSV first for context.</div>
+
+          <div class="row g-2 align-items-end mb-2">
+            <div class="col-md-6">
+              <label class="form-label mb-1">OpenAI API Key</label>
+              <input id="wa-openaiKey" type="password" class="form-control" placeholder="sk-...">
+              <div class="form-text">Stored locally if “Remember” is checked. Prefer a backend proxy in production.</div>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label mb-1">Model</label>
+              <select id="wa-openaiModel" class="form-select">
+                <option value="gpt-4o-mini" selected>gpt-4o-mini (fast, affordable)</option>
+                <option value="gpt-4o">gpt-4o (higher quality)</option>
+                <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <div class="form-check mb-1">
+                <input class="form-check-input" type="checkbox" id="wa-rememberKey">
+                <label class="form-check-label" for="wa-rememberKey">Remember key on this device</label>
+              </div>
+            </div>
+          </div>
+
+          <textarea id="wa-promptBox" class="form-control mt-2" rows="3" placeholder="Ask about your workout data..."></textarea>
+          <div class="mt-3 d-flex gap-2 align-items-center">
+            <button id="wa-askBtn" class="btn btn-primary" disabled>Ask</button>
+            <span id="wa-askStatus" class="text-secondary small"></span>
+          </div>
+          <hr class="d-none" id="wa-answerHr">
+          <div id="wa-answerDiv" class="d-none"><b>Assistant:</b><pre id="wa-answer" class="mono"></pre></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- libs -->
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.0/full/pyodide.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+let PY = null;                 // shared pyodide instance
+let HSA_READY=false, WA_READY=false;
+let HSA_CONTEXT="", WA_CONTEXT="";
+
+/* ---------- tiny helpers for safe Python triple-quoted strings ---------- */
+function toPyTripleQuoted(s){
+  if (s == null) return "";
+  return String(s)
+    .replace(/\\/g, "\\\\")   // backslashes first
+    .replace(/"""/g, '\\"""') // escape triple quotes
+    .replace(/\r/g, "\\r")
+    .replace(/\n/g, "\\n");
+}
+
+/* ====================== INIT PYODIDE (merge both apps) ====================== */
+async function initPy(){
+  const hsaStatus = document.getElementById('hsa-status');
+  const waStatus  = document.getElementById('wa-status');
+  try{
+    hsaStatus.textContent = waStatus.textContent = "🔄 Loading Pyodide...";
+    PY = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.0/full/" });
+    hsaStatus.textContent = waStatus.textContent = "📦 Loading numpy/pandas/matplotlib...";
+    await PY.loadPackage(['numpy','pandas','matplotlib']);
+    hsaStatus.textContent = waStatus.textContent = "🔧 Installing Python helpers...";
+
+    PY.runPython(`
+import io, base64, re, numpy as np, pandas as pd
+from matplotlib import use
+use('Agg')
+import matplotlib.pyplot as plt
+
+def _plot_to_base64(fig):
+    buf = io.BytesIO(); fig.savefig(buf, format="png", bbox_inches='tight', dpi=144); buf.seek(0)
+    b64 = base64.b64encode(buf.read()).decode('utf-8'); plt.close(fig); return b64
+
+# ---------- Health & Sleep functions ----------
+def hsa_make_nicer_pie(labels, sizes, title):
+    sizes = np.array(sizes, dtype=float); sizes[np.isnan(sizes)]=0; sizes[sizes<0]=0
+    fig, ax = plt.subplots(figsize=(8,6))
+    colors = ['#FF9800','#FFE0B2','#FFB74D','#FFCC80','#FFA726','#F57C00']
+    explode = [0.08 if i==np.argmax(sizes) else 0.03 for i in range(len(sizes))]
+    ax.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=120, colors=colors[:len(labels)],
+           explode=explode, shadow=False, wedgeprops=dict(width=0.55, edgecolor='white', linewidth=2),
+           textprops=dict(color="#111", fontsize=13, fontweight="bold"))
+    ax.set_title(title, fontsize=16, fontweight='bold', color='#333'); ax.axis('equal'); fig.tight_layout()
+    return _plot_to_base64(fig)
+
+def hsa_make_bar(averages):
+    fig, ax = plt.subplots(figsize=(8,6))
+    keys=list(averages.keys()); values=list(averages.values())
+    bars=ax.bar(keys, values, color='#1976D2'); ymax=max(values)*1.2 if max(values)>0 else 1
+    ax.set_ylim([0, ymax]); ax.set_ylabel('Average Value', fontsize=13); ax.set_title('Average Key Metrics', fontsize=16, pad=10)
+    plt.xticks(rotation=20, fontsize=12)
+    for b in bars:
+        ax.text(b.get_x()+b.get_width()/2, b.get_height()+ymax*0.02, f'{b.get_height():.1f}',
+                ha='center', va='bottom', fontsize=12, fontweight='bold',
+                color='#1976D2', bbox=dict(facecolor='white', edgecolor='#1976D2', boxstyle='round,pad=0.2'))
+    fig.tight_layout(); return _plot_to_base64(fig)
+
+def hsa_to_json_rows(df):
+    try: return df.to_json(orient='records')
+    except: return "[]"
+
+def hsa_process_whoop_csv(csv_text):
+    df = pd.read_csv(io.StringIO(csv_text))
+    df.columns = [c.strip().replace(' ', '_') for c in df.columns]
+    req=["Recovery_score_%","Resting_heart_rate_(bpm)","Heart_rate_variability_(ms)","Sleep_performance_%"]
+    miss=[c for c in req if c not in df.columns]
+    if miss: raise ValueError(f"Missing required columns: {miss}")
+
+    averages = {
+        "Recovery": round(df["Recovery_score_%"].mean(), 2),
+        "Rest_HR": round(df["Resting_heart_rate_(bpm)"].mean(), 2),
+        "HRV": round(df["Heart_rate_variability_(ms)"].mean(), 2),
+        "Sleep_Perf": round(df["Sleep_performance_%"].mean(), 2),
+        "Sleep_Debt": round(df["Sleep_debt_(min)"].mean(), 2) if "Sleep_debt_(min)" in df else 0,
+    }
+    total_days = int(len(df))
+    rec_low = int((df["Recovery_score_%"] < 50).sum())
+    rec_med = int(((df["Recovery_score_%"] >= 50) & (df["Recovery_score_%"] < 80)).sum())
+    rec_high = int((df["Recovery_score_%"] >= 80).sum())
+    recovery_dist = {"Low": rec_low, "Medium": rec_med, "High": rec_high}
+
+    if "Sleep_debt_(min)" in df:
+        sd_series = pd.to_numeric(df["Sleep_debt_(min)"], errors="coerce").dropna()
+        sd_low  = int((sd_series < 30).sum()); sd_mod  = int(((sd_series >= 30) & (sd_series < 100)).sum()); sd_high = int((sd_series >= 100).sum())
+        sleep_debt_dist = {"Low": sd_low, "Moderate": sd_mod, "High": sd_high}
+
+        if "Cycle_start_time" in df.columns:
+            ls = df.nsmallest(3, "Sleep_debt_(min)")[["Cycle_start_time","Sleep_debt_(min)"]]
+            hs = df.nlargest(5, "Sleep_debt_(min)")[["Cycle_start_time","Sleep_debt_(min)"]]
+        else:
+            ls = df.nsmallest(3, "Sleep_debt_(min)")[["Sleep_debt_(min)"]]
+            hs = df.nlargest(5, "Sleep_debt_(min)")[["Sleep_debt_(min)"]]
+        lowest_sleep_json = hsa_to_json_rows(ls)
+        highest_sleep_json = hsa_to_json_rows(hs)
+    else:
+        sleep_debt_dist = {"Low":0,"Moderate":0,"High":0}
+        lowest_sleep_json="[]"; highest_sleep_json="[]"
+
+    bar_chart = hsa_make_bar(averages)
+    pie_low_recovery = hsa_make_nicer_pie(["Low Recovery (<50)","Normal/High"], [rec_low, total_days-rec_low], "Low Recovery Days")
+    high_sleep_debt_count = sleep_debt_dist["High"]
+    pie_high_sleep_debt = hsa_make_nicer_pie(["High Sleep Debt (>100)","Normal/Low"], [high_sleep_debt_count, total_days-high_sleep_debt_count], "High Sleep Debt Days")
+
+    br = df.nlargest(3, "Recovery_score_%")[["Cycle_start_time","Recovery_score_%"]] if "Cycle_start_time" in df.columns else df.nlargest(3, "Recovery_score_%")[["Recovery_score_%"]]
+    wr = df.nsmallest(5, "Recovery_score_%")[["Cycle_start_time","Recovery_score_%"]] if "Cycle_start_time" in df.columns else df.nsmallest(5, "Recovery_score_%")[["Recovery_score_%"]]
+
+    best_hrv_row = df.loc[df["Heart_rate_variability_(ms)"].idxmax()][["Cycle_start_time","Heart_rate_variability_(ms)"]] if "Cycle_start_time" in df.columns else None
+    worst_rest_row = df.loc[df["Resting_heart_rate_(bpm)"].idxmax()][["Cycle_start_time","Resting_heart_rate_(bpm)"]] if "Cycle_start_time" in df.columns else None
+    best_sleep_perf_row = df.loc[df["Sleep_performance_%"].idxmax()][["Cycle_start_time","Sleep_performance_%"]] if "Cycle_start_time" in df.columns else None
+
+    return {
+        "success": True,
+        "averages": averages,
+        "total_days": total_days,
+        "recovery_dist": recovery_dist,
+        "sleep_debt_dist": sleep_debt_dist,
+        "bar_chart": bar_chart,
+        "pie_low_recovery": pie_low_recovery,
+        "pie_high_sleep_debt": pie_high_sleep_debt,
+        "best_recovery_json": hsa_to_json_rows(br),
+        "worst_recovery_json": hsa_to_json_rows(wr),
+        "lowest_sleep_debt_json": lowest_sleep_json,
+        "highest_sleep_debt_json": highest_sleep_json,
+        "notables": {
+            "best_hrv": None if best_hrv_row is None else {"when": str(best_hrv_row["Cycle_start_time"]), "value": float(best_hrv_row["Heart_rate_variability_(ms)"])},
+            "worst_rest_hr": None if worst_rest_row is None else {"when": str(worst_rest_row["Cycle_start_time"]), "value": float(worst_rest_row["Resting_heart_rate_(bpm)"])},
+            "best_sleep_perf": None if best_sleep_perf_row is None else {"when": str(best_sleep_perf_row["Cycle_start_time"]), "value": float(best_sleep_perf_row["Sleep_performance_%"])}
+        }
+    }
+
+# ---------- Workout functions ----------
+def wa_bar_chart(data, title=""):
+    fig, ax = plt.subplots(figsize=(8,6))
+    keys=list(data.keys()); vals=list(data.values())
+    bars=ax.bar(keys, vals, color="#1976D2"); ymax=max(vals)*1.2 if max(vals)>0 else 1
+    ax.set_ylim([0, ymax]); ax.set_ylabel("Value"); ax.set_title(title, fontsize=16)
+    plt.xticks(rotation=20, fontsize=12)
+    for b in bars:
+        ax.text(b.get_x()+b.get_width()/2, b.get_height()+ymax*0.02, f"{b.get_height():.1f}",
+                ha="center", va="bottom", fontsize=12, fontweight="bold", color="#1976D2",
+                bbox=dict(facecolor="white", edgecolor="#1976D2", boxstyle="round,pad=0.2"))
+    fig.tight_layout(); return _plot_to_base64(fig)
+
+def wa_donut(labels, sizes, title):
+    sizes = np.array(sizes, dtype=float); sizes[np.isnan(sizes)]=0; sizes[sizes<0]=0
+    total = sizes.sum(); 
+    if total==0: sizes=np.ones_like(sizes); total=sizes.sum()
+    colors=["#FF9800","#FFE0B2","#FFB74D","#FFCC80","#FFA726","#F57C00","#FB8C00","#FECBA1"]
+    explode=[0.08 if s==sizes.max() else 0.03 for s in sizes]
+    def pct_fmt(p): return f"{p:.1f}%" if p>=5 else ""
+    fig,ax=plt.subplots(figsize=(8,6))
+    ax.pie(sizes, labels=labels, autopct=pct_fmt, startangle=120,
+           colors=colors[:len(labels)], explode=explode,
+           wedgeprops=dict(width=0.55, edgecolor="white", linewidth=2),
+           pctdistance=0.78, textprops=dict(color="#111", fontsize=11, fontweight="bold"), normalize=True)
+    ax.set_title(title, fontsize=16); ax.axis("equal"); fig.tight_layout(); return _plot_to_base64(fig)
+
+def wa_fmt_num(n, d=1):
+    try:
+        if n is None or np.isnan(n): return "N/A"
+        return f"{float(n):,.{d}f}"
+    except: return "N/A"
+
+def wa_normalize_headers(df):
+    def norm(c):
+        c = c.strip().lower()
+        c = re.sub(r"[^\\w]+", "_", c)
+        c = re.sub(r"_{2,}", "_", c).strip("_")
+        return c
+    df = df.copy(); df.columns=[norm(c) for c in df.columns]; return df
+
+def wa_hr_zone_from_avg(avg_hr):
+    if pd.isna(avg_hr): return "Unknown"
+    v=float(avg_hr)
+    if v<100: return "Z1 (Very Easy)"
+    if v<120: return "Z2 (Easy)"
+    if v<140: return "Z3 (Moderate)"
+    if v<160: return "Z4 (Hard)"
+    return "Z5 (Very Hard)"
+
+def wa_process_csv(csv_text):
+    df = pd.read_csv(io.StringIO(csv_text)); df = wa_normalize_headers(df)
+    if "workout_start_time" in df.columns: df["_date"]=pd.to_datetime(df["workout_start_time"], errors="coerce")
+    elif "cycle_start_time" in df.columns: df["_date"]=pd.to_datetime(df["cycle_start_time"], errors="coerce")
+    else: raise ValueError("CSV must include 'Workout start time' or 'Cycle start time'.")
+    df["_type"]=df["activity_name"] if "activity_name" in df.columns else "Workout"
+
+    if "duration_min" in df.columns: df["_duration_min"]=pd.to_numeric(df["duration_min"], errors="coerce")
+    elif "duration" in df.columns:   df["_duration_min"]=pd.to_numeric(df["duration"], errors="coerce")
+    else: raise ValueError("CSV must include 'Duration (min)' column.")
+
+    df["_avg_hr"]=pd.to_numeric(df.get("average_hr_bpm", np.nan), errors="coerce")
+    df["_max_hr"]=pd.to_numeric(df.get("max_hr_bpm", np.nan), errors="coerce")
+    df["_calories"]=pd.to_numeric(df.get("energy_burned_cal", np.nan), errors="coerce")
+    df["_strain"]=pd.to_numeric(df.get("activity_strain", np.nan), errors="coerce")
+    if "distance_meters" in df.columns: df["_distance_km"]=pd.to_numeric(df["distance_meters"], errors="coerce")/1000.0
+    else: df["_distance_km"]=np.nan
+
+    df=df.sort_values("_date").reset_index(drop=True); total_rows=len(df)
+    agg={}
+    agg["duration_min_mean"]=float(df["_duration_min"].mean()) if total_rows>0 else 0.0
+    dm=df["_distance_km"].mean(); agg["distance_km_mean"]=float(dm) if not pd.isna(dm) else None
+    ah=df["_avg_hr"].mean(); agg["avg_hr_mean"]=float(ah) if not pd.isna(ah) else None
+    mh=df["_max_hr"].mean(); agg["max_hr_mean"]=float(mh) if not pd.isna(mh) else None
+    cal=df["_calories"].mean(); agg["calories_mean"]=float(cal) if not pd.isna(cal) else None
+    st=df["_strain"].mean(); agg["strain_mean"]=float(st) if not pd.isna(st) else None
+
+    if total_rows>0 and not df["_date"].isna().all():
+        end=df["_date"].max(); start=end - pd.Timedelta(days=6)
+        last7=df.loc[(df["_date"]>=start) & (df["_date"]<=end)]
+        agg["weekly_minutes"]=float(last7["_duration_min"].sum())
+        agg["weekly_distance_km"]=float(last7["_distance_km"].sum()) if not last7["_distance_km"].isna().all() else 0.0
+        agg["weekly_sessions"]=int((~last7["_date"].isna()).sum())
+    else:
+        agg["weekly_minutes"]=0.0; agg["weekly_distance_km"]=0.0; agg["weekly_sessions"]=0
+
+    by_type=df["_type"].value_counts().to_dict()
+    short=int((df["_duration_min"]<30).sum()); medium=int(((df["_duration_min"]>=30)&(df["_duration_min"]<60)).sum()); long=int((df["_duration_min"]>=60).sum())
+    duration_mix={"<30m":short,"30–59m":medium,"≥60m":long}
+    top_activity=max(by_type.items(), key=lambda kv: kv[1])[0] if by_type else None
+    top_count=by_type.get(top_activity,0) if top_activity else 0
+
+    averages={
+        "Dur (min)": round(agg["duration_min_mean"],2) if agg["duration_min_mean"] else 0,
+        "Dist (km)": round(agg["distance_km_mean"],2) if agg.get("distance_km_mean") else 0,
+        "Avg HR": round(agg["avg_hr_mean"],1) if agg.get("avg_hr_mean") else 0,
+        "Max HR": round(agg["max_hr_mean"],1) if agg.get("max_hr_mean") else 0,
+        "Calories": round(agg["calories_mean"],0) if agg.get("calories_mean") else 0,
+        "Strain": round(agg["strain_mean"],1) if agg.get("strain_mean") else 0,
+    }
+    bar_b64 = wa_bar_chart(averages, "Average Key Workout Metrics")
+    pie_activity_b64 = wa_donut(list(by_type.keys()), list(by_type.values()), "Activity Mix") if by_type else None
+    pie_duration_b64 = wa_donut(list(duration_mix.keys()), list(duration_mix.values()), "Duration Mix")
+
+    if total_rows>=3:
+        top_long=df.nlargest(3,"_duration_min")[["_date","_type","_duration_min"]]
+        low_long=df.nsmallest(3,"_duration_min")[["_date","_type","_duration_min"]]
+    else:
+        top_long=df.nlargest(total_rows,"_duration_min")[["_date","_type","_duration_min"]]
+        low_long=df.nsmallest(total_rows,"_duration_min")[["_date","_type","_duration_min"]]
+    best_json=top_long.rename(columns={"_date":"Date","_type":"Activity","_duration_min":"Minutes"}).to_json(orient="records")
+    worst_json=low_long.rename(columns={"_date":"Date","_type":"Activity","_duration_min":"Minutes"}).to_json(orient="records")
+
+    hr_group=df.groupby("_type").agg(avg_hr_mean=("_avg_hr","mean"), total_minutes=("_duration_min","sum"), sessions=("_avg_hr","count")).reset_index()
+    hr_group["zone"]=hr_group["avg_hr_mean"].apply(wa_hr_zone_from_avg)
+    hr_group=hr_group.dropna(subset=["avg_hr_mean"]).sort_values("avg_hr_mean", ascending=False).head(8)
+    hr_zones_json=hr_group.rename(columns={"_type":"Activity","avg_hr_mean":"AvgHR","total_minutes":"Minutes","sessions":"Sessions","zone":"Zone"}).to_json(orient="records")
+
+    lines=[
+        f"Rows (workouts): {len(df)}",
+        f"Avg Duration (min): {wa_fmt_num(agg['duration_min_mean'],2)}",
+        f"Avg Distance (km): {wa_fmt_num(agg.get('distance_km_mean'),2)}",
+        f"Avg HR (bpm): {wa_fmt_num(agg.get('avg_hr_mean'),1)} | Max HR (bpm): {wa_fmt_num(agg.get('max_hr_mean'),1)}",
+        f"Avg Strain: {wa_fmt_num(agg.get('strain_mean'),1)} | Avg Calories: {wa_fmt_num(agg.get('calories_mean'),0)}",
+        f"Weekly Volume (min): {wa_fmt_num(agg['weekly_minutes'],1)} | Weekly Distance (km): {wa_fmt_num(agg.get('weekly_distance_km'),1)} | Weekly Sessions: {agg['weekly_sessions']}",
+        "Mix by activity: " + ", ".join([f"{k}={v}" for k,v in by_type.items()])
+    ]
+    context="\\n".join(lines)
+    return {"agg":agg,"bar_chart":bar_b64,"pie_activity":pie_activity_b64,"pie_duration":pie_duration_b64,
+            "best_json":best_json,"worst_json":worst_json,"hr_zones_json":hr_zones_json,
+            "top_activity":top_activity,"top_count":int(top_count),"total_rows":int(len(df)),"context":context}
+
+def wa_coach_response(context, prompt):
+    if not prompt.strip(): return "Please ask me something about your workout data!"
+    lines=["🏃 WORKOUT COACHING INSIGHTS:","","💡 KEY RECOMMENDATIONS:","• Keep weekly volume within ±15% of current average","• Alternate high and low intensity days","• Include 1–2 complete rest days per week","• Progress distance/duration gradually (≈10% rule)","","📊 YOUR DATA SUMMARY:",context[:400]+("..." if len(context)>400 else ""), "", "🎯 Ask about: plans, recovery, pacing, or progression."]
+    return "\\n".join(lines)
+    `);
+
+    HSA_READY = WA_READY = true;
+    hsaStatus.textContent = "✅ Ready to analyze your WHOOP data!";
+    hsaStatus.className = "text-success small mt-2";
+    waStatus.textContent = "✅ Ready to analyze!";
+    waStatus.className = "text-success small mt-2";
+
+    // enable buttons
+    ['hsa-analyzeBtn','hsa-clearBtn','hsa-debugBtn','hsa-askBtn','wa-analyzeBtn','wa-clearBtn','wa-debugBtn','wa-askBtn']
+      .forEach(id => document.getElementById(id).disabled = false);
+
+    // restore any saved API key to both tabs
+    const saved = localStorage.getItem('openai_api_key');
+    if(saved){
+      document.getElementById('hsa-openaiKey').value = saved;
+      document.getElementById('hsa-rememberKey').checked = true;
+      document.getElementById('wa-openaiKey').value = saved;
+      document.getElementById('wa-rememberKey').checked = true;
+    }
+
+  }catch(e){
+    hsaStatus.textContent = "❌ Failed to initialize: " + (e?.message||e);
+    hsaStatus.className = "text-danger small mt-2";
+    waStatus.textContent  = "❌ Failed to initialize: " + (e?.message||e);
+    waStatus.className  = "text-danger small mt-2";
+    console.error(e);
+  }
+}
+
+/* ====================== SHARED HELPERS ====================== */
+function pct(n,t){ return t ? Math.round((n/t)*100) : 0; }
+function renderRowsFromJson(jsonStr, valueKey, unit, badgeClass){
+  const list=document.createElement('div'); list.className='list-group list-compact';
+  let rows=[]; try{rows=JSON.parse(jsonStr||"[]");}catch{rows=[];}
+  if(!rows.length){list.innerHTML='<div class="text-secondary small"><i>None</i></div>'; return list;}
+  rows.forEach(r=>{
+    const when=r.Cycle_start_time||r.Date||'—';
+    const raw=r[valueKey];
+    const val=(typeof raw==='number') ? raw.toFixed(0) : (raw ?? '—');
+    const item=document.createElement('div'); item.className='list-group-item';
+    item.innerHTML=`<span class="text-truncate" style="max-width:60%">${when}</span>
+                    <span class="badge ${badgeClass}">${val}${unit}</span>`;
+    list.appendChild(item);
+  });
+  return list;
+}
+function waBarClassByPct(p){ if(p>=100) return "bar-ok"; if(p>=60) return "bar-warn"; return "bar-bad"; }
+function waList(items, badgeClass){
+  const wrap=document.createElement('div'); wrap.className='list-group list-compact';
+  items.forEach(it=>{
+    const date=(it.Date||'').toString(); const act=(it.Activity||'—').toString();
+    const mins=(it.Minutes!=null)?Number(it.Minutes).toFixed(0):'—';
+    const item=document.createElement('div'); item.className='list-group-item';
+    item.innerHTML=`<span class="text-truncate" style="max-width:60%">${date} — ${act}</span>
+                    <span class="badge ${badgeClass}">${mins} min</span>`;
+    wrap.appendChild(item);
+  });
+  return wrap;
+}
+function waZonesList(items){
+  const wrap=document.createElement('div'); wrap.className='list-group list-compact';
+  items.forEach(it=>{
+    const act=(it.Activity||'—').toString(); const zone=(it.Zone||'Unknown').toString();
+    const avg=(it.AvgHR!=null)?Number(it.AvgHR).toFixed(0):'—';
+    const mins=(it.Minutes!=null)?Number(it.Minutes).toFixed(0):'0';
+    const item=document.createElement('div'); item.className='list-group-item';
+    item.innerHTML=`<span class="text-truncate" style="max-width:60%">${act} — <span class="text-secondary">${zone} • ${mins} min</span></span>
+                    <span class="badge text-bg-primary">${avg} bpm</span>`;
+    wrap.appendChild(item);
+  });
+  if(!items.length) wrap.innerHTML='<div class="text-secondary small"><i>No HR data available.</i></div>';
+  return wrap;
+}
+
+/* ====================== HSA (WHOOP) UI ====================== */
+document.getElementById('hsa-csvFile').addEventListener('change', e=>{
+  document.getElementById('hsa-error').textContent="";
+  if(e.target.files.length>0){ document.getElementById('hsa-status').textContent=`📄 Selected: ${e.target.files[0].name}`; }
+});
+document.getElementById('hsa-analyzeBtn').addEventListener('click', async ()=>{
+  if(!HSA_READY){ document.getElementById('hsa-error').textContent="⏳ Please wait for Python environment..."; return; }
+  const file=document.getElementById('hsa-csvFile').files[0];
+  if(!file){ document.getElementById('hsa-error').textContent="📁 Please select a CSV file first."; return; }
+  if(!file.name.toLowerCase().endsWith('.csv')){ document.getElementById('hsa-error').textContent="📄 Please upload a CSV (.csv)."; return; }
+  const raw=await file.text(); if(!raw.trim()){ document.getElementById('hsa-error').textContent="📄 The uploaded file appears to be empty."; return; }
+  const csvEsc=toPyTripleQuoted(raw);
+  const status=document.getElementById('hsa-status');
+  try{
+    status.textContent="🔄 Processing WHOOP data..."; status.className="text-primary small mt-2";
+    const result = PY.runPython(`hsa_process_whoop_csv("""${csvEsc}""")`).toJs({dict_hook:Object});
+    const d=result;
+
+    document.getElementById('hsa-barChart').src="data:image/png;base64,"+d.bar_chart;
+    document.getElementById('hsa-pieRecovery').src="data:image/png;base64,"+d.pie_low_recovery;
+    document.getElementById('hsa-pieSleepDebt').src="data:image/png;base64,"+d.pie_high_sleep_debt;
+
+    const days=d.total_days||0;
+    document.getElementById('hsa-qi-days').textContent=`${days} days`;
+    const av=d.averages||{}; const avgRec=av.Recovery??0, avgHRV=av.HRV??0;
+    document.getElementById('hsa-qi-avg-recov').textContent=`${avgRec.toFixed(1)}%`;
+    document.getElementById('hsa-qi-avg-hrv').textContent=`${avgHRV.toFixed(1)}`;
+    const band=document.getElementById('hsa-qi-recov-band');
+    if(avgRec>=80){band.textContent="High"; band.className="metric-chip success";}
+    else if(avgRec>=50){band.textContent="Medium"; band.className="metric-chip warning";}
+    else {band.textContent="Low"; band.className="metric-chip danger";}
+
+    const rec=d.recovery_dist||{}; const sd=d.sleep_debt_dist||{};
+    const recTotal=(rec.Low||0)+(rec.Medium||0)+(rec.High||0);
+    document.getElementById('hsa-qi-lowrecov-pct').textContent = `${pct(rec.Low||0,recTotal)}%`;
+    const sdTotal=(sd.Low||0)+(sd.Moderate||0)+(sd.High||0);
+    document.getElementById('hsa-qi-highdebt-pct').textContent = `${pct(sd.High||0,sdTotal)}%`;
+
+    const ul=document.getElementById('hsa-qi-notable'); ul.innerHTML="";
+    const n=d.notables||{};
+    if(n.best_hrv) ul.innerHTML+=`<li>Best HRV: <b>${n.best_hrv.value.toFixed(1)}</b> ms on <span class="text-secondary">${n.best_hrv.when}</span></li>`;
+    if(n.worst_rest_hr) ul.innerHTML+=`<li>Highest Rest HR: <b>${n.worst_rest_hr.value.toFixed(1)}</b> bpm on <span class="text-secondary">${n.worst_rest_hr.when}</span></li>`;
+    if(n.best_sleep_perf) ul.innerHTML+=`<li>Best Sleep Performance: <b>${n.best_sleep_perf.value.toFixed(1)}</b>% on <span class="text-secondary">${n.best_sleep_perf.when}</span></li>`;
+    if(!ul.innerHTML) ul.innerHTML="<li><i>No notable days computed.</i></li>";
+
+    document.getElementById('hsa-recoveryTotal').textContent=`${recTotal} days`;
+    document.getElementById('hsa-recoveryLowLbl').textContent=`${rec.Low||0} (${pct(rec.Low||0,recTotal)}%)`;
+    document.getElementById('hsa-recoveryMedLbl').textContent=`${rec.Medium||0} (${pct(rec.Medium||0,recTotal)}%)`;
+    document.getElementById('hsa-recoveryHighLbl').textContent=`${rec.High||0} (${pct(rec.High||0,recTotal)}%)`;
+    document.getElementById('hsa-recoveryLowBar').style.width=pct(rec.Low||0,recTotal)+'%';
+    document.getElementById('hsa-recoveryMedBar').style.width=pct(rec.Medium||0,recTotal)+'%';
+    document.getElementById('hsa-recoveryHighBar').style.width=pct(rec.High||0,recTotal)+'%';
+
+    document.getElementById('hsa-sleepDebtTotal').textContent=`${sdTotal} days`;
+    document.getElementById('hsa-sleepLowLbl').textContent=`${sd.Low||0} (${pct(sd.Low||0,sdTotal)}%)`;
+    document.getElementById('hsa-sleepModLbl').textContent=`${sd.Moderate||0} (${pct(sd.Moderate||0,sdTotal)}%)`;
+    document.getElementById('hsa-sleepHighLbl').textContent=`${sd.High||0} (${pct(sd.High||0,sdTotal)}%)`;
+    document.getElementById('hsa-sleepLowBar').style.width=pct(sd.Low||0,sdTotal)+'%';
+    document.getElementById('hsa-sleepModBar').style.width=pct(sd.Moderate||0,sdTotal)+'%';
+    document.getElementById('hsa-sleepHighBar').style.width=pct(sd.High||0,sdTotal)+'%';
+
+    const bestWrap=document.getElementById('hsa-bestRecovery'); bestWrap.innerHTML='';
+    bestWrap.appendChild(renderRowsFromJson(d.best_recovery_json,'Recovery_score_%','%','text-bg-success'));
+    const worstWrap=document.getElementById('hsa-worstRecovery'); worstWrap.innerHTML='';
+    worstWrap.appendChild(renderRowsFromJson(d.worst_recovery_json,'Recovery_score_%','%','text-bg-danger'));
+
+    const lowDebtWrap = document.getElementById('hsa-lowestSleepDebt'); lowDebtWrap.innerHTML='';
+    const highDebtWrap = document.getElementById('hsa-highestSleepDebt'); highDebtWrap.innerHTML='';
+    lowDebtWrap.appendChild(renderRowsFromJson(d.lowest_sleep_debt_json,'Sleep_debt_(min)',' min','text-bg-success'));
+    highDebtWrap.appendChild(renderRowsFromJson(d.highest_sleep_debt_json,'Sleep_debt_(min)',' min','text-bg-danger'));
+
+    document.getElementById('hsa-metricsCard').classList.remove('d-none');
+    document.getElementById('hsa-noContext').style.display='none';
+    document.getElementById('hsa-ctx-badge').className="badge text-bg-success ms-2";
+    document.getElementById('hsa-ctx-badge').textContent="Context: True";
+    status.textContent="✅ Analysis complete!"; status.className="text-success small mt-2";
+  }catch(e){
+    document.getElementById('hsa-error').textContent="❌ Processing error: "+e.message;
+    document.getElementById('hsa-status').textContent="❌ Processing failed";
+    document.getElementById('hsa-status').className="text-danger small mt-2";
+    console.error(e);
+  }
+});
+document.getElementById('hsa-clearBtn').addEventListener('click', ()=>{
+  HSA_CONTEXT=""; document.getElementById('hsa-metricsCard').classList.add('d-none');
+  document.getElementById('hsa-noContext').style.display='block';
+  document.getElementById('hsa-ctx-badge').className="badge text-bg-secondary ms-2";
+  document.getElementById('hsa-ctx-badge').textContent="Context: False";
+  ['hsa-error','hsa-answer'].forEach(id=>document.getElementById(id).textContent="");
+  document.getElementById('hsa-answerDiv').classList.add('d-none'); document.getElementById('hsa-answerHr').classList.add('d-none');
+  document.getElementById('hsa-csvFile').value="";
+  document.getElementById('hsa-promptBox').value="";
+  document.getElementById('hsa-status').textContent="✅ Ready to analyze your WHOOP data!";
+  document.getElementById('hsa-status').className="text-success small mt-2";
+});
+document.getElementById('hsa-debugBtn').addEventListener('click', ()=> alert("🐛 DEBUG INFO: Pyodide ready = "+(!!PY)));
+document.getElementById('hsa-askBtn').addEventListener('click', async ()=>{
+  const prompt=document.getElementById('hsa-promptBox').value.trim();
+  const key=document.getElementById('hsa-openaiKey').value.trim();
+  const model=document.getElementById('hsa-openaiModel').value;
+  if(!prompt){ document.getElementById('hsa-error').textContent="💬 Please enter a question about your health data."; return; }
+  if(!PY){ document.getElementById('hsa-error').textContent="⏳ Python environment not ready yet."; return; }
+
+  try{
+    document.getElementById('hsa-error').textContent="";
+    const recDist=document.getElementById('hsa-recoveryTotal').textContent;
+    const sdDist =document.getElementById('hsa-sleepDebtTotal').textContent;
+    const qi={
+      days: document.getElementById('hsa-qi-days').textContent,
+      avgRecovery: document.getElementById('hsa-qi-avg-recov').textContent,
+      avgHRV: document.getElementById('hsa-qi-avg-hrv').textContent,
+      pctLowRecovery: document.getElementById('hsa-qi-lowrecov-pct').textContent,
+      pctHighSleepDebt: document.getElementById('hsa-qi-highdebt-pct').textContent
+    };
+    const contextBlob = `Days=${qi.days}; AvgRecovery=${qi.avgRecovery}; AvgHRV=${qi.avgHRV}; LowRecovery%=${qi.pctLowRecovery}; HighSleepDebt%=${qi.pctHighSleepDebt}; RecoveryTotal=${recDist}; SleepDebtTotal=${sdDist}.`;
+
+    if(document.getElementById('hsa-rememberKey').checked && key){ localStorage.setItem('openai_api_key', key); }
+    else { localStorage.removeItem('openai_api_key'); }
+
+    const askStatus=document.getElementById('hsa-askStatus');
+    askStatus.innerHTML=`<span class="spinner"></span> contacting OpenAI…`;
+    const system = `You are a helpful health & sleep coach. Use the provided WHOOP summary context to answer concretely with specific actions. If numbers are referenced, cite them from the context. Avoid medical diagnoses. Context: """${contextBlob}"""`;
+    let reply="";
+    if(key){
+      const res = await fetch("https://api.openai.com/v1/chat/completions",{
+        method:"POST", headers:{ "Content-Type":"application/json", "Authorization":"Bearer "+key },
+        body: JSON.stringify({ model, messages:[{role:"system",content:system},{role:"user",content:prompt}], temperature:0.7 })
+      });
+      if(!res.ok){ const t=await res.text(); throw new Error(`OpenAI error ${res.status}: ${t}`); }
+      const data = await res.json(); askStatus.textContent="✅";
+      reply = data.choices?.[0]?.message?.content ?? "(no content)";
+    }else{
+      reply = "⚠️ No API key set. Add a key to query OpenAI.";
+    }
+    document.getElementById('hsa-answerHr').classList.remove('d-none');
+    document.getElementById('hsa-answerDiv').classList.remove('d-none');
+    document.getElementById('hsa-answer').textContent = reply;
+  }catch(e){
+    document.getElementById('hsa-askStatus').textContent="";
+    document.getElementById('hsa-error').textContent="🤖 Chat error: "+e.message;
+    console.error(e);
+  }
+});
+
+/* ====================== WA (Workout) UI ====================== */
+document.getElementById('wa-analyzeBtn').addEventListener('click', async ()=>{
+  if(!WA_READY){ document.getElementById('wa-error').textContent="Please wait for initialization to complete."; return; }
+  const file=document.getElementById('wa-csvFile').files[0];
+  if(!file){ document.getElementById('wa-error').textContent="Please select a CSV file."; return; }
+  try{
+    document.getElementById('wa-status').textContent="🔄 Processing...";
+    document.getElementById('wa-error').textContent="";
+    const raw=await file.text();
+    const csvEsc=toPyTripleQuoted(raw);
+    const data = PY.runPython(`wa_process_csv("""${csvEsc}""")`).toJs({dict_hook:Object});
+    WA_CONTEXT = data.context || "";
+
+    if(data.bar_chart) document.getElementById('wa-barImg').src="data:image/png;base64,"+data.bar_chart;
+    if(data.pie_activity) document.getElementById('wa-pieActivityImg').src="data:image/png;base64,"+data.pie_activity;
+    if(data.pie_duration) document.getElementById('wa-pieDurationImg').src="data:image/png;base64,"+data.pie_duration;
+
+    const agg=data.agg||{};
+    document.getElementById('wa-qi-days').textContent = `${data.total_rows || 0} workouts`;
+    document.getElementById('wa-qi-avg-dur').textContent = `${(agg.duration_min_mean||0).toFixed(1)} min`;
+    const durChip=document.getElementById('wa-qi-dur-band');
+    const durVal=agg.duration_min_mean||0;
+    durChip.textContent = durVal>=60 ? "long" : durVal>=30 ? "moderate" : "short";
+    durChip.className = `metric-chip ${ durVal>=60 ? 'chip-ok' : durVal>=30 ? 'chip-warn' : 'chip-bad' }`;
+    document.getElementById('wa-qi-hr').textContent = `${agg.avg_hr_mean ? agg.avg_hr_mean.toFixed(0) : '—'} / ${agg.max_hr_mean ? agg.max_hr_mean.toFixed(0) : '—'} bpm`;
+    document.getElementById('wa-qi-weekly-min').textContent = `${(agg.weekly_minutes||0).toFixed(0)} min`;
+    document.getElementById('wa-qi-top-activity').textContent = (data.top_activity ? `${data.top_activity} (${data.top_count})` : '—');
+
+    const goalMin=150, goalSessions=4, goalDist=20;
+    const gMinVal=Math.round(agg.weekly_minutes||0);
+    const gMinPct=Math.min(100, Math.round((gMinVal/goalMin)*100));
+    document.getElementById('wa-goalMinLbl').textContent=`${gMinPct}%`;
+    const minBar=document.getElementById('wa-goalMinBar');
+    minBar.style.width=gMinPct+'%'; minBar.className=waBarClassByPct(gMinPct);
+    document.getElementById('wa-goalMinVal').textContent=gMinVal;
+
+    const gSesVal=agg.weekly_sessions||0;
+    const gSesPct=Math.min(100, Math.round((gSesVal/goalSessions)*100));
+    document.getElementById('wa-goalSessionsLbl').textContent=`${gSesPct}%`;
+    const sesBar=document.getElementById('wa-goalSessionsBar'); sesBar.style.width=gSesPct+'%'; sesBar.className=waBarClassByPct(gSesPct);
+    document.getElementById('wa-goalSessionsVal').textContent=gSesVal;
+
+    const gDistVal=Number(agg.weekly_distance_km||0);
+    const gDistPct=Math.min(100, Math.round((gDistVal/goalDist)*100));
+    document.getElementById('wa-goalDistLbl').textContent=isNaN(gDistVal)?'N/A':`${gDistPct}%`;
+    const distBar=document.getElementById('wa-goalDistBar'); distBar.style.width=isNaN(gDistVal)?'0%':(gDistPct+'%'); distBar.className=waBarClassByPct(gDistPct);
+    document.getElementById('wa-goalDistVal').textContent=isNaN(gDistVal)?'N/A':gDistVal.toFixed(1);
+
+    const bestArr=JSON.parse(data.best_json||"[]"); const worstArr=JSON.parse(data.worst_json||"[]");
+    const bestWrap=document.getElementById('wa-bestList'); bestWrap.innerHTML=''; bestWrap.appendChild(waList(bestArr,'text-bg-success'));
+    const worstWrap=document.getElementById('wa-worstList'); worstWrap.innerHTML=''; worstWrap.appendChild(waList(worstArr,'text-bg-danger'));
+
+    const zonesArr=JSON.parse(data.hr_zones_json||"[]"); const zonesWrap=document.getElementById('wa-hrZonesList'); zonesWrap.innerHTML=''; zonesWrap.appendChild(waZonesList(zonesArr));
+
+    document.getElementById('wa-metricsCard').classList.remove('d-none');
+    document.getElementById('wa-noContext').style.display='none';
+    document.getElementById('wa-ctx-badge').className="badge text-bg-success ms-2";
+    document.getElementById('wa-ctx-badge').textContent="Context: Ready";
+
+    document.getElementById('wa-status').textContent="✅ Analysis complete!";
+    document.getElementById('wa-status').className="text-success small mt-2";
+  }catch(error){
+    document.getElementById('wa-error').textContent="Error: "+error.message;
+    document.getElementById('wa-status').textContent="❌ Processing failed";
+    document.getElementById('wa-status').className="text-danger small mt-2";
+    console.error(error);
+  }
+});
+
+document.getElementById('wa-clearBtn').addEventListener('click', ()=>{
+  WA_CONTEXT="";
+  document.getElementById('wa-metricsCard').classList.add('d-none');
+  document.getElementById('wa-noContext').style.display='block';
+  document.getElementById('wa-ctx-badge').className="badge text-bg-secondary ms-2";
+  document.getElementById('wa-ctx-badge').textContent="Context: False";
+  document.getElementById('wa-error').textContent="";
+  document.getElementById('wa-answer').textContent="";
+  document.getElementById('wa-answerDiv').classList.add('d-none');
+  document.getElementById('wa-answerHr').classList.add('d-none');
+  document.getElementById('wa-csvFile').value="";
+  document.getElementById('wa-status').textContent="✅ Ready to analyze!";
+  document.getElementById('wa-askStatus').textContent="";
+});
+
+document.getElementById('wa-debugBtn').addEventListener('click', ()=>{
+  const info={ready:!!PY, has_context:!!WA_CONTEXT, context_length: WA_CONTEXT.length};
+  alert(JSON.stringify(info,null,2));
+});
+
+// Ask (Workout)
+document.getElementById('wa-askBtn').addEventListener('click', async () => {
+  if (!WA_CONTEXT) { document.getElementById('wa-error').textContent = "Upload a CSV first."; return; }
+  const prompt = document.getElementById('wa-promptBox').value.trim();
+  const key    = document.getElementById('wa-openaiKey').value.trim();
+  const model  = document.getElementById('wa-openaiModel').value;
+  if (!prompt) { document.getElementById('wa-error').textContent = "Enter a question."; return; }
+
+  try {
+    document.getElementById('wa-error').textContent = "";
+
+    const qi = {
+      days:       document.getElementById('wa-qi-days').textContent,
+      avgDur:     document.getElementById('wa-qi-avg-dur').textContent,
+      hr:         document.getElementById('wa-qi-hr').textContent,
+      weeklyMin:  document.getElementById('wa-qi-weekly-min').textContent,
+      topAct:     document.getElementById('wa-qi-top-activity').textContent
+    };
+    const goalMin  = document.getElementById('wa-goalMinVal').textContent;
+    const goalSes  = document.getElementById('wa-goalSessionsVal').textContent;
+    const goalDist = document.getElementById('wa-goalDistVal').textContent;
+
+    const widgetContext =
+      `Workouts=${qi.days}; AvgDuration=${qi.avgDur}; HR=${qi.hr}; ` +
+      `WeeklyMinutes=${qi.weeklyMin}; TopActivity=${qi.topAct}; ` +
+      `Last7d: minutes=${goalMin}, sessions=${goalSes}, distance_km=${goalDist}.`;
+
+    const fullContext = WA_CONTEXT + "\n" + widgetContext;
+
+    if (document.getElementById('wa-rememberKey').checked && key) {
+      localStorage.setItem('openai_api_key', key);
+    } else {
+      localStorage.removeItem('openai_api_key');
+    }
+
+    const askStatus = document.getElementById('wa-askStatus');
+    askStatus.innerHTML = `<span class="spinner"></span> contacting OpenAI…`;
+    let reply = "";
+
+    if (key) {
+      const system =
+        `You are a helpful workout coach. Use the provided workout summary context ` +
+        `to answer with clear, specific actions. Avoid medical diagnoses. ` +
+        `Context: """${fullContext}"""`;
+
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: "system", content: system }, { role: "user", content: prompt }],
+          temperature: 0.7
+        })
+      });
+
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(`OpenAI error ${res.status}: ${t}`);
+      }
+
+      const data = await res.json();
+      askStatus.textContent = "✅";
+      reply = data.choices?.[0]?.message?.content ?? "(no content)";
+    } else {
+      // Local fallback via Python helper
+      try {
+        const escapedContext = toPyTripleQuoted(fullContext);
+        const escapedPrompt  = toPyTripleQuoted(prompt);
+        const _tmp = PY.runPython(`wa_coach_response("""${escapedContext}""", """${escapedPrompt}""")`);
+        reply = (typeof _tmp?.toJs === 'function') ? _tmp.toJs() : String(_tmp);
+        askStatus.textContent = "✅ local";
+      } catch (pyError) {
+        console.error('Python execution error:', pyError);
+        reply = "🏃 WORKOUT COACHING INSIGHTS:\n\n" +
+                "💡 KEY RECOMMENDATIONS:\n" +
+                "• Keep weekly volume within ±15% of current average\n" +
+                "• Alternate high and low intensity days\n" +
+                "• Include 1–2 complete rest days per week\n" +
+                "• Progress distance/duration gradually (≈10% rule)\n\n" +
+                "🎯 Ask about: plans, recovery, pacing, or progression.";
+        askStatus.textContent = "✅ fallback";
+      }
+    }
+
+    document.getElementById('wa-answerHr').classList.remove('d-none');
+    document.getElementById('wa-answerDiv').classList.remove('d-none');
+    document.getElementById('wa-answer').textContent = reply;
+
+  } catch (e) {
+    document.getElementById('wa-askStatus').textContent = "";
+    document.getElementById('wa-error').textContent = "🤖 Chat error: " + e.message;
+    console.error(e);
+  }
+});
+
+
+/* ====================== BOOT ====================== */
+document.addEventListener('DOMContentLoaded', initPy);
+</script>
+</body>
+</html>
