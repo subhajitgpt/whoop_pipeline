@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
-  <title>Health & Sleep +  Workout Analyzer</title>
+  <title>Health & Sleep + Workout Analyzer</title>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
   <style>
@@ -14,21 +14,14 @@
     .section-title{font-weight:700;color:#0f172a}
     .min-h{min-height:40px}
     .metric-chip{font-weight:600;padding:.35rem .6rem;border-radius:999px}
-    .metric-chip.primary{background:#e8f1ff;color:#0b63ce}
     .metric-chip.success{background:#e9f9ef;color:#0f8f3d}
     .metric-chip.warning{background:#fff6e5;color:#b96a00}
     .metric-chip.danger{background:#ffe9e9;color:#cc2e2e}
-    .chip-ok{background:#e9f9ef;color:#0f8f3d}
-    .chip-warn{background:#fff6e5;color:#b96a00}
-    .chip-bad{background:#ffe9e9;color:#cc2e2e}
     .progress{height:10px;background:#eef2f7}
     .progress-bar{background-image:linear-gradient(90deg,#1976D2,#2F80ED)}
     .progress-bar.warn{background-image:linear-gradient(90deg,#FF9800,#FFB74D)}
     .progress-bar.ok{background-image:linear-gradient(90deg,#16a34a,#22c55e)}
     .progress-bar.bad{background-image:linear-gradient(90deg,#ef4444,#f97393)}
-    .bar-ok{background-image:linear-gradient(90deg,#16a34a,#22c55e)}
-    .bar-warn{background-image:linear-gradient(90deg,#FF9800,#FFB74D)}
-    .bar-bad{background-image:linear-gradient(90deg,#ef4444,#f97393)}
     .list-compact .list-group-item{padding:.5rem .75rem;display:flex;justify-content:space-between;align-items:center;gap:.75rem}
     .list-compact .list-group-item span:first-child{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .list-compact .badge{font-size:.8rem;min-width:72px;text-align:right}
@@ -36,6 +29,9 @@
     .equal-fill{flex:1 1 auto}
     .spinner{display:inline-block;width:1rem;height:1rem;border:2px solid #cbd5e1;border-top-color:#2563eb;border-radius:50%;animation:spin .8s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
+    .bar-ok{background-image:linear-gradient(90deg,#16a34a,#22c55e)}
+    .bar-warn{background-image:linear-gradient(90deg,#FF9800,#FFB74D)}
+    .bar-bad{background-image:linear-gradient(90deg,#ef4444,#f97393)}
   </style>
 </head>
 <body>
@@ -65,11 +61,20 @@
           <h5 class="card-title">1) Upload WHOOP CSV
             <span id="hsa-ctx-badge" class="badge text-bg-secondary ms-2">Context: False</span>
           </h5>
-          <div class="row g-2 align-items-center">
+          <div class="row g-2 align-items-end">
             <div class="col-auto"><input id="hsa-csvFile" class="form-control" type="file" accept=".csv" required></div>
+            <!-- Date range -->
+            <div class="col-auto">
+              <label class="form-label mb-1">From</label>
+              <input id="hsa-dateFrom" type="date" class="form-control">
+            </div>
+            <div class="col-auto">
+              <label class="form-label mb-1">To</label>
+              <input id="hsa-dateTo" type="date" class="form-control">
+            </div>
             <div class="col-auto"><button id="hsa-analyzeBtn" class="btn btn-primary" disabled>Analyze</button></div>
-            <div class="col-auto"><button id="hsa-clearBtn" class="btn btn-outline-secondary" disabled>Clear context</button></div>
-            <div class="col-auto"><button id="hsa-debugBtn" class="btn btn-outline-dark" disabled>/debug</button></div>
+            <div class="col-auto"><button id="hsa-clearBtn" class="btn btn-outline-secondary" disabled>Clear</button></div>
+            <div class="col-auto"><button id="hsa-debugBtn" class="btn btn-outline-dark" disabled>Debug</button></div>
           </div>
           <div id="hsa-error" class="text-danger mt-2 min-h"></div>
           <div id="hsa-status" class="text-secondary small mt-2">🔄 Initializing Python environment...</div>
@@ -194,15 +199,6 @@
 
           <div class="row g-2 align-items-end mb-2">
             <div class="col-md-6">
-              <label class="form-label mb-1">OpenAI API Key</label>
-              <input id="hsa-openaiKey" type="password" class="form-control" placeholder="sk-...">
-              <div class="form-text">Stored locally in your browser if you click “Remember”. For production, use a backend proxy.</div>
-              <div class="form-check mt-2">
-                <input class="form-check-input" type="checkbox" id="hsa-useCustomKey">
-                <label class="form-check-label" for="hsa-useCustomKey">Use my key (override built-in key)</label>
-              </div>
-            </div>
-            <div class="col-md-3">
               <label class="form-label mb-1">Model</label>
               <select id="hsa-openaiModel" class="form-select">
                 <option value="gpt-4o-mini" selected>gpt-4o-mini (fast, cheap)</option>
@@ -210,15 +206,12 @@
                 <option value="gpt-4.1-mini">gpt-4.1-mini</option>
               </select>
             </div>
-            <div class="col-md-3">
-              <div class="form-check mb-1">
-                <input class="form-check-input" type="checkbox" id="hsa-rememberKey">
-                <label class="form-check-label" for="hsa-rememberKey">Remember key on this device</label>
-              </div>
+            <div class="col-md-6 text-end">
+              <button id="hsa-insertCtx" class="btn btn-outline-secondary mt-4">Insert Context</button>
             </div>
           </div>
 
-          <textarea id="hsa-promptBox" class="form-control" rows="4" placeholder="E.g., Suggest a 7-day plan to improve HRV given my averages and bad days."></textarea>
+          <textarea id="hsa-promptBox" class="form-control" rows="4" placeholder="Ask a question or click ‘Insert Context’ to start…"></textarea>
           <div class="mt-3 d-flex gap-2">
             <button id="hsa-askBtn" class="btn btn-primary" disabled>Ask</button>
             <span id="hsa-askStatus" class="text-secondary small"></span>
@@ -239,8 +232,17 @@
           <h5 class="card-title">1) Upload Workout CSV
             <span id="wa-ctx-badge" class="badge text-bg-secondary ms-2">Context: False</span>
           </h5>
-          <div class="row g-2 align-items-center">
+          <div class="row g-2 align-items-end">
             <div class="col-auto"><input id="wa-csvFile" class="form-control" type="file" accept=".csv" required></div>
+            <!-- Date range -->
+            <div class="col-auto">
+              <label class="form-label mb-1">From</label>
+              <input id="wa-dateFrom" type="date" class="form-control">
+            </div>
+            <div class="col-auto">
+              <label class="form-label mb-1">To</label>
+              <input id="wa-dateTo" type="date" class="form-control">
+            </div>
             <div class="col-auto"><button id="wa-analyzeBtn" class="btn btn-primary" disabled>Analyze</button></div>
             <div class="col-auto"><button id="wa-clearBtn" class="btn btn-outline-secondary" disabled>Clear</button></div>
             <div class="col-auto"><button id="wa-debugBtn" class="btn btn-outline-dark" disabled>Debug</button></div>
@@ -364,15 +366,6 @@
 
           <div class="row g-2 align-items-end mb-2">
             <div class="col-md-6">
-              <label class="form-label mb-1">OpenAI API Key</label>
-              <input id="wa-openaiKey" type="password" class="form-control" placeholder="sk-...">
-              <div class="form-text">Stored locally if “Remember” is checked. Prefer a backend proxy in production.</div>
-              <div class="form-check mt-2">
-                <input class="form-check-input" type="checkbox" id="wa-useCustomKey">
-                <label class="form-check-label" for="wa-useCustomKey">Use my key (override built-in key)</label>
-              </div>
-            </div>
-            <div class="col-md-3">
               <label class="form-label mb-1">Model</label>
               <select id="wa-openaiModel" class="form-select">
                 <option value="gpt-4o-mini" selected>gpt-4o-mini (fast, affordable)</option>
@@ -380,15 +373,12 @@
                 <option value="gpt-4.1-mini">gpt-4.1-mini</option>
               </select>
             </div>
-            <div class="col-md-3">
-              <div class="form-check mb-1">
-                <input class="form-check-input" type="checkbox" id="wa-rememberKey">
-                <label class="form-check-label" for="wa-rememberKey">Remember key on this device</label>
-              </div>
+            <div class="col-md-6 text-end">
+              <button id="wa-insertCtx" class="btn btn-outline-secondary mt-4">Insert Context</button>
             </div>
           </div>
 
-          <textarea id="wa-promptBox" class="form-control mt-2" rows="3" placeholder="Ask about your workout data..."></textarea>
+          <textarea id="wa-promptBox" class="form-control mt-2" rows="3" placeholder="Ask about your workout data…"></textarea>
           <div class="mt-3 d-flex gap-2 align-items-center">
             <button id="wa-askBtn" class="btn btn-primary" disabled>Ask</button>
             <span id="wa-askStatus" class="text-secondary small"></span>
@@ -407,18 +397,50 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
+/* ====================== ENCRYPTED KEY SETUP (XOR + SHA256) ======================
+   Generate encrypted strings with your helper script and paste them below. */
+const KEY_PASSPHRASE = "default_salt_2024";          // must match your Python tool
+const OPENAI_KEY_ENCRYPTED = "cOw7g0W4eGXznpOpZzSoOFmOIm04p+lSkou0OhHs9D1LxWarB5lzePb5ss9QHLpgM5w9TQu9xmagjqUtGv/+BG3lXsJgk1oA8orawWIylTpUvw81L6jveoKPlCtUy8AmbekhmX3uIhrCkZrZExCBemLlCXNY87VUh5e/NBfo0DtM/nzHYbxQfOD5h8dKL5ZPVr03dgup2HPxj5IBC/f1BjLgIrI=";                      // <-- paste OPENAI_KEY_ENCRYPTED value here
+                   // optional
+
+async function sha256Bytes(text){
+  const buf = new TextEncoder().encode(text);
+  const hash = await crypto.subtle.digest('SHA-256', buf);
+  return new Uint8Array(hash);
+}
+
+function b64ToBytes(b64){
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i=0;i<bin.length;i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+function bytesToAscii(u8){
+  // Throw if non-ASCII (prevents the “non ISO-8859-1 code point” fetch header error)
+  for (let i=0;i<u8.length;i++){ if (u8[i] > 0x7F) throw new Error("Decrypted key contains non-ASCII chars."); }
+  return String.fromCharCode.apply(null, Array.from(u8));
+}
+
+async function decryptXorB64(b64, passphrase){
+  if(!b64) return "";
+  const data = b64ToBytes(b64);
+  const h = await sha256Bytes(passphrase);
+  const out = new Uint8Array(data.length);
+  for(let i=0;i<data.length;i++){ out[i] = data[i] ^ h[i % h.length]; }
+  return bytesToAscii(out);
+}
+
+async function getOpenAIKey(){
+  const key = await decryptXorB64(OPENAI_KEY_ENCRYPTED, KEY_PASSPHRASE);
+  if(!key) throw new Error("Invalid or missing encrypted API key. Check KEY_PASSPHRASE / ciphertext.");
+  return key.trim();
+}
+
+/* ====================== PYODIDE SHARED ====================== */
 let PY = null;                 // shared pyodide instance
 let HSA_READY=false, WA_READY=false;
-let HSA_CONTEXT="", WA_CONTEXT="";
 
-/* ====================== BUILT-IN OPENAI KEY ====================== */
-/*  ***** SET YOUR HARDCODED OPENAI KEY BELOW *****
-    SECURITY NOTE: Shipping a live key in client-side code is not recommended for production.
-    Prefer a backend proxy. This is provided because you explicitly requested hardcoding.
-*/
-const HARDCODED_OPENAI_KEY = "";
-
-/* ---------- tiny helpers for safe Python triple-quoted strings ---------- */
 function toPyTripleQuoted(s){
   if (s == null) return "";
   return String(s)
@@ -428,15 +450,6 @@ function toPyTripleQuoted(s){
     .replace(/\n/g, "\\n");
 }
 
-/* Helper: pick effective key (custom overrides built-in if checkbox is checked & non-empty) */
-function getEffectiveKey(tabPrefix){
-  const useCustom = document.getElementById(`${tabPrefix}-useCustomKey`)?.checked;
-  const userKey = document.getElementById(`${tabPrefix}-openaiKey`)?.value.trim();
-  if (useCustom && userKey) return userKey;
-  return HARDCODED_OPENAI_KEY || "";
-}
-
-/* ====================== INIT PYODIDE (merge both apps) ====================== */
 async function initPy(){
   const hsaStatus = document.getElementById('hsa-status');
   const waStatus  = document.getElementById('wa-status');
@@ -457,14 +470,14 @@ def _plot_to_base64(fig):
     buf = io.BytesIO(); fig.savefig(buf, format="png", bbox_inches='tight', dpi=144); buf.seek(0)
     b64 = base64.b64encode(buf.read()).decode('utf-8'); plt.close(fig); return b64
 
-# ---------- Health & Sleep functions ----------
-def hsa_make_nicer_pie(labels, sizes, title):
+# ---------- Health & Sleep ----------
+def hsa_make_pie(labels, sizes, title):
     sizes = np.array(sizes, dtype=float); sizes[np.isnan(sizes)]=0; sizes[sizes<0]=0
     fig, ax = plt.subplots(figsize=(8,6))
     colors = ['#FF9800','#FFE0B2','#FFB74D','#FFCC80','#FFA726','#F57C00']
     explode = [0.08 if i==np.argmax(sizes) else 0.03 for i in range(len(sizes))]
     ax.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=120, colors=colors[:len(labels)],
-           explode=explode, shadow=False, wedgeprops=dict(width=0.55, edgecolor='white', linewidth=2),
+           explode=explode, wedgeprops=dict(width=0.55, edgecolor='white', linewidth=2),
            textprops=dict(color="#111", fontsize=13, fontweight="bold"))
     ax.set_title(title, fontsize=16, fontweight='bold', color='#333'); ax.axis('equal'); fig.tight_layout()
     return _plot_to_base64(fig)
@@ -485,12 +498,23 @@ def hsa_to_json_rows(df):
     try: return df.to_json(orient='records')
     except: return "[]"
 
-def hsa_process_whoop_csv(csv_text):
+def _apply_date_range(df, col, start, end):
+    if col not in df.columns: return df
+    s = pd.to_datetime(start) if start else None
+    e = pd.to_datetime(end) if end else None
+    t = pd.to_datetime(df[col], errors='coerce')
+    if s is not None: df = df.loc[t>=s]
+    if e is not None: df = df.loc[t<=e]
+    return df
+
+def hsa_process_whoop_csv(csv_text, start_date=None, end_date=None):
     df = pd.read_csv(io.StringIO(csv_text))
     df.columns = [c.strip().replace(' ', '_') for c in df.columns]
     req=["Recovery_score_%","Resting_heart_rate_(bpm)","Heart_rate_variability_(ms)","Sleep_performance_%"]
     miss=[c for c in req if c not in df.columns]
     if miss: raise ValueError(f"Missing required columns: {miss}")
+
+    df = _apply_date_range(df, "Cycle_start_time", start_date, end_date)
 
     averages = {
         "Recovery": round(df["Recovery_score_%"].mean(), 2),
@@ -500,42 +524,65 @@ def hsa_process_whoop_csv(csv_text):
         "Sleep_Debt": round(df["Sleep_debt_(min)"].mean(), 2) if "Sleep_debt_(min)" in df else 0,
     }
     total_days = int(len(df))
-    rec_low = int((df["Recovery_score_%"] < 50).sum())
-    rec_med = int(((df["Recovery_score_%"] >= 50) & (df["Recovery_score_%"] < 80)).sum())
+    rec_low  = int((df["Recovery_score_%"] < 50).sum())
+    rec_med  = int(((df["Recovery_score_%"] >= 50) & (df["Recovery_score_%"] < 80)).sum())
     rec_high = int((df["Recovery_score_%"] >= 80).sum())
     recovery_dist = {"Low": rec_low, "Medium": rec_med, "High": rec_high}
 
-    if "Sleep_debt_(min)" in df:
+    if "Sleep_debt_(min)" in df.columns:
         sd_series = pd.to_numeric(df["Sleep_debt_(min)"], errors="coerce").dropna()
-        sd_low  = int((sd_series < 30).sum()); sd_mod  = int(((sd_series >= 30) & (sd_series < 100)).sum()); sd_high = int((sd_series >= 100).sum())
+        sd_low  = int((sd_series < 30).sum())
+        sd_mod  = int(((sd_series >= 30) & (sd_series < 100)).sum())
+        sd_high = int((sd_series >= 100).sum())
         sleep_debt_dist = {"Low": sd_low, "Moderate": sd_mod, "High": sd_high}
-
-        if "Cycle_start_time" in df.columns:
-            ls = df.nsmallest(3, "Sleep_debt_(min)")[["Cycle_start_time","Sleep_debt_(min)"]]
-            hs = df.nlargest(5, "Sleep_debt_(min)")[["Cycle_start_time","Sleep_debt_(min)"]]
-        else:
-            ls = df.nsmallest(3, "Sleep_debt_(min)")[["Sleep_debt_(min)"]]
-            hs = df.nlargest(5, "Sleep_debt_(min)")[["Sleep_debt_(min)"]]
-        lowest_sleep_json = hsa_to_json_rows(ls)
-        highest_sleep_json = hsa_to_json_rows(hs)
     else:
         sleep_debt_dist = {"Low":0,"Moderate":0,"High":0}
-        lowest_sleep_json="[]"; highest_sleep_json="[]"
+
+    def _with_date(dfin):
+        d = dfin.copy()
+        if "Cycle_start_time" in d.columns:
+            d["Date"] = pd.to_datetime(d["Cycle_start_time"], errors="coerce").dt.strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            d["Date"] = ""
+        return d
+
+    if "Cycle_start_time" in df.columns:
+        br_src = df.nlargest(3, "Recovery_score_%")[["Cycle_start_time","Recovery_score_%"]]
+        wr_src = df.nsmallest(5, "Recovery_score_%")[["Cycle_start_time","Recovery_score_%"]]
+    else:
+        br_src = df.nlargest(3, "Recovery_score_%")[["Recovery_score_%"]]
+        wr_src = df.nsmallest(5, "Recovery_score_%")[["Recovery_score_%"]]
+
+    br = _with_date(br_src)[["Date","Recovery_score_%"]]
+    wr = _with_date(wr_src)[["Date","Recovery_score_%"]]
+    best_recovery_json = hsa_to_json_rows(br)
+    worst_recovery_json = hsa_to_json_rows(wr)
+
+    if "Sleep_debt_(min)" in df.columns:
+        if "Cycle_start_time" in df.columns:
+            ls_src = df.nsmallest(3, "Sleep_debt_(min)")[["Cycle_start_time","Sleep_debt_(min)"]]
+            hs_src = df.nlargest(5, "Sleep_debt_(min)")[["Cycle_start_time","Sleep_debt_(min)"]]
+        else:
+            ls_src = df.nsmallest(3, "Sleep_debt_(min)")[["Sleep_debt_(min)"]]
+            hs_src = df.nlargest(5, "Sleep_debt_(min)")[["Sleep_debt_(min)"]]
+        ls = _with_date(ls_src)[["Date","Sleep_debt_(min)"]]
+        hs = _with_date(hs_src)[["Date","Sleep_debt_(min)"]]
+        lowest_sleep_json  = hsa_to_json_rows(ls)
+        highest_sleep_json = hsa_to_json_rows(hs)
+    else:
+        lowest_sleep_json  = "[]"
+        highest_sleep_json = "[]"
 
     bar_chart = hsa_make_bar(averages)
-    pie_low_recovery = hsa_make_nicer_pie(["Low Recovery (<50)","Normal/High"], [rec_low, total_days-rec_low], "Low Recovery Days")
+    pie_low_recovery = hsa_make_pie(["Low Recovery (<50)","Normal/High"], [rec_low, total_days-rec_low], "Low Recovery Days")
     high_sleep_debt_count = sleep_debt_dist["High"]
-    pie_high_sleep_debt = hsa_make_nicer_pie(["High Sleep Debt (>100)","Normal/Low"], [high_sleep_debt_count, total_days-high_sleep_debt_count], "High Sleep Debt Days")
+    pie_high_sleep_debt = hsa_make_pie(["High Sleep Debt (>100)","Normal/Low"], [high_sleep_debt_count, total_days-high_sleep_debt_count], "High Sleep Debt Days")
 
-    br = df.nlargest(3, "Recovery_score_%")[["Cycle_start_time","Recovery_score_%"]] if "Cycle_start_time" in df.columns else df.nlargest(3, "Recovery_score_%")[["Recovery_score_%"]]
-    wr = df.nsmallest(5, "Recovery_score_%")[["Cycle_start_time","Recovery_score_%"]] if "Cycle_start_time" in df.columns else df.nsmallest(5, "Recovery_score_%")[["Recovery_score_%"]]
-
-    best_hrv_row = df.loc[df["Heart_rate_variability_(ms)"].idxmax()][["Cycle_start_time","Heart_rate_variability_(ms)"]] if "Cycle_start_time" in df.columns else None
-    worst_rest_row = df.loc[df["Resting_heart_rate_(bpm)"].idxmax()][["Cycle_start_time","Resting_heart_rate_(bpm)"]] if "Cycle_start_time" in df.columns else None
-    best_sleep_perf_row = df.loc[df["Sleep_performance_%"].idxmax()][["Cycle_start_time","Sleep_performance_%"]] if "Cycle_start_time" in df.columns else None
+    best_hrv_row = df.loc[df["Heart_rate_variability_(ms)"].idxmax()][["Cycle_start_time","Heart_rate_variability_(ms)"]] if len(df)>0 else None
+    worst_rest_row = df.loc[df["Resting_heart_rate_(bpm)"].idxmax()][["Cycle_start_time","Resting_heart_rate_(bpm)"]] if len(df)>0 else None
+    best_sleep_perf_row = df.loc[df["Sleep_performance_%"].idxmax()][["Cycle_start_time","Sleep_performance_%"]] if len(df)>0 else None
 
     return {
-        "success": True,
         "averages": averages,
         "total_days": total_days,
         "recovery_dist": recovery_dist,
@@ -543,8 +590,8 @@ def hsa_process_whoop_csv(csv_text):
         "bar_chart": bar_chart,
         "pie_low_recovery": pie_low_recovery,
         "pie_high_sleep_debt": pie_high_sleep_debt,
-        "best_recovery_json": hsa_to_json_rows(br),
-        "worst_recovery_json": hsa_to_json_rows(wr),
+        "best_recovery_json": best_recovery_json,
+        "worst_recovery_json": worst_recovery_json,
         "lowest_sleep_debt_json": lowest_sleep_json,
         "highest_sleep_debt_json": highest_sleep_json,
         "notables": {
@@ -554,7 +601,7 @@ def hsa_process_whoop_csv(csv_text):
         }
     }
 
-# ---------- Workout functions ----------
+# ---------- Workout ----------
 def wa_bar_chart(data, title=""):
     fig, ax = plt.subplots(figsize=(8,6))
     keys=list(data.keys()); vals=list(data.values())
@@ -581,12 +628,6 @@ def wa_donut(labels, sizes, title):
            pctdistance=0.78, textprops=dict(color="#111", fontsize=11, fontweight="bold"), normalize=True)
     ax.set_title(title, fontsize=16); ax.axis("equal"); fig.tight_layout(); return _plot_to_base64(fig)
 
-def wa_fmt_num(n, d=1):
-    try:
-        if n is None or np.isnan(n): return "N/A"
-        return f"{float(n):,.{d}f}"
-    except: return "N/A"
-
 def wa_normalize_headers(df):
     def norm(c):
         c = c.strip().lower()
@@ -595,16 +636,15 @@ def wa_normalize_headers(df):
         return c
     df = df.copy(); df.columns=[norm(c) for c in df.columns]; return df
 
-def wa_hr_zone_from_avg(avg_hr):
-    if pd.isna(avg_hr): return "Unknown"
-    v=float(avg_hr)
-    if v<100: return "Z1 (Very Easy)"
-    if v<120: return "Z2 (Easy)"
-    if v<140: return "Z3 (Moderate)"
-    if v<160: return "Z4 (Hard)"
-    return "Z5 (Very Hard)"
+def _wa_apply_date_range(df, start, end):
+    if "_date" not in df.columns: return df
+    s = pd.to_datetime(start) if start else None
+    e = pd.to_datetime(end) if end else None
+    if s is not None: df = df.loc[df["_date"]>=s]
+    if e is not None: df = df.loc[df["_date"]<=e]
+    return df
 
-def wa_process_csv(csv_text):
+def wa_process_csv(csv_text, start_date=None, end_date=None):
     df = pd.read_csv(io.StringIO(csv_text)); df = wa_normalize_headers(df)
     if "workout_start_time" in df.columns: df["_date"]=pd.to_datetime(df["workout_start_time"], errors="coerce")
     elif "cycle_start_time" in df.columns: df["_date"]=pd.to_datetime(df["cycle_start_time"], errors="coerce")
@@ -622,7 +662,10 @@ def wa_process_csv(csv_text):
     if "distance_meters" in df.columns: df["_distance_km"]=pd.to_numeric(df["distance_meters"], errors="coerce")/1000.0
     else: df["_distance_km"]=np.nan
 
+    df = _wa_apply_date_range(df, start_date, end_date)
+
     df=df.sort_values("_date").reset_index(drop=True); total_rows=len(df)
+
     agg={}
     agg["duration_min_mean"]=float(df["_duration_min"].mean()) if total_rows>0 else 0.0
     dm=df["_distance_km"].mean(); agg["distance_km_mean"]=float(dm) if not pd.isna(dm) else None
@@ -631,7 +674,7 @@ def wa_process_csv(csv_text):
     cal=df["_calories"].mean(); agg["calories_mean"]=float(cal) if not pd.isna(cal) else None
     st=df["_strain"].mean(); agg["strain_mean"]=float(st) if not pd.isna(st) else None
 
-    if total_rows>0 and not df["_date"].isna().all():
+    if total_rows>0:
         end=df["_date"].max(); start=end - pd.Timedelta(days=6)
         last7=df.loc[(df["_date"]>=start) & (df["_date"]<=end)]
         agg["weekly_minutes"]=float(last7["_duration_min"].sum())
@@ -647,12 +690,12 @@ def wa_process_csv(csv_text):
     top_count=by_type.get(top_activity,0) if top_activity else 0
 
     averages={
-        "Dur (min)": round(agg["duration_min_mean"],2) if agg["duration_min_mean"] else 0,
-        "Dist (km)": round(agg["distance_km_mean"],2) if agg.get("distance_km_mean") else 0,
-        "Avg HR": round(agg["avg_hr_mean"],1) if agg.get("avg_hr_mean") else 0,
-        "Max HR": round(agg["max_hr_mean"],1) if agg.get("max_hr_mean") else 0,
-        "Calories": round(agg["calories_mean"],0) if agg.get("calories_mean") else 0,
-        "Strain": round(agg["strain_mean"],1) if agg.get("strain_mean") else 0,
+        "Dur (min)": round(agg["duration_min_mean"] or 0,2),
+        "Dist (km)": round(agg.get("distance_km_mean") or 0,2),
+        "Avg HR": round(agg.get("avg_hr_mean") or 0,1),
+        "Max HR": round(agg.get("max_hr_mean") or 0,1),
+        "Calories": round(agg.get("calories_mean") or 0,0),
+        "Strain": round(agg.get("strain_mean") or 0,1),
     }
     bar_b64 = wa_bar_chart(averages, "Average Key Workout Metrics")
     pie_activity_b64 = wa_donut(list(by_type.keys()), list(by_type.values()), "Activity Mix") if by_type else None
@@ -668,28 +711,23 @@ def wa_process_csv(csv_text):
     worst_json=low_long.rename(columns={"_date":"Date","_type":"Activity","_duration_min":"Minutes"}).to_json(orient="records")
 
     hr_group=df.groupby("_type").agg(avg_hr_mean=("_avg_hr","mean"), total_minutes=("_duration_min","sum"), sessions=("_avg_hr","count")).reset_index()
-    hr_group["zone"]=hr_group["avg_hr_mean"].apply(wa_hr_zone_from_avg)
+    hr_group["zone"]=hr_group["avg_hr_mean"].apply(lambda v: "Z1 (Very Easy)" if v<100 else "Z2 (Easy)" if v<120 else "Z3 (Moderate)" if v<140 else "Z4 (Hard)" if v<160 else "Z5 (Very Hard)")
     hr_group=hr_group.dropna(subset=["avg_hr_mean"]).sort_values("avg_hr_mean", ascending=False).head(8)
     hr_zones_json=hr_group.rename(columns={"_type":"Activity","avg_hr_mean":"AvgHR","total_minutes":"Minutes","sessions":"Sessions","zone":"Zone"}).to_json(orient="records")
 
     lines=[
         f"Rows (workouts): {len(df)}",
-        f"Avg Duration (min): {wa_fmt_num(agg['duration_min_mean'],2)}",
-        f"Avg Distance (km): {wa_fmt_num(agg.get('distance_km_mean'),2)}",
-        f"Avg HR (bpm): {wa_fmt_num(agg.get('avg_hr_mean'),1)} | Max HR (bpm): {wa_fmt_num(agg.get('max_hr_mean'),1)}",
-        f"Avg Strain: {wa_fmt_num(agg.get('strain_mean'),1)} | Avg Calories: {wa_fmt_num(agg.get('calories_mean'),0)}",
-        f"Weekly Volume (min): {wa_fmt_num(agg['weekly_minutes'],1)} | Weekly Distance (km): {wa_fmt_num(agg.get('weekly_distance_km'),1)} | Weekly Sessions: {agg['weekly_sessions']}",
+        f"Avg Duration (min): {agg['duration_min_mean']:.2f}",
+        f"Avg Distance (km): {0 if agg.get('distance_km_mean') is None else agg['distance_km_mean']:.2f}",
+        f"Avg HR (bpm): {0 if agg.get('avg_hr_mean') is None else agg['avg_hr_mean']:.1f} | Max HR (bpm): {0 if agg.get('max_hr_mean') is None else agg['max_hr_mean']:.1f}",
+        f"Avg Strain: {0 if agg.get('strain_mean') is None else agg['strain_mean']:.1f} | Avg Calories: {0 if agg.get('calories_mean') is None else agg['calories_mean']:.0f}",
+        f"Weekly Volume (min): {agg['weekly_minutes']:.1f}",
         "Mix by activity: " + ", ".join([f"{k}={v}" for k,v in by_type.items()])
     ]
     context="\\n".join(lines)
     return {"agg":agg,"bar_chart":bar_b64,"pie_activity":pie_activity_b64,"pie_duration":pie_duration_b64,
             "best_json":best_json,"worst_json":worst_json,"hr_zones_json":hr_zones_json,
             "top_activity":top_activity,"top_count":int(top_count),"total_rows":int(len(df)),"context":context}
-
-def wa_coach_response(context, prompt):
-    if not prompt.strip(): return "Please ask me something about your workout data!"
-    lines=["🏃 WORKOUT COACHING INSIGHTS:","","💡 KEY RECOMMENDATIONS:","• Keep weekly volume within ±15% of current average","• Alternate high and low intensity days","• Include 1–2 complete rest days per week","• Progress distance/duration gradually (≈10% rule)","","📊 YOUR DATA SUMMARY:",context[:400]+("..." if len(context)>400 else ""), "", "🎯 Ask about: plans, recovery, pacing, or progression."]
-    return "\\n".join(lines)
     `);
 
     HSA_READY = WA_READY = true;
@@ -699,17 +737,8 @@ def wa_coach_response(context, prompt):
     waStatus.className = "text-success small mt-2";
 
     // enable buttons
-    ['hsa-analyzeBtn','hsa-clearBtn','hsa-debugBtn','hsa-askBtn','wa-analyzeBtn','wa-clearBtn','wa-debugBtn','wa-askBtn']
+    ['hsa-analyzeBtn','hsa-clearBtn','hsa-debugBtn','hsa-askBtn','wa-analyzeBtn','wa-clearBtn','wa-debugBtn','wa-askBtn','hsa-insertCtx','wa-insertCtx']
       .forEach(id => document.getElementById(id).disabled = false);
-
-    // restore any saved API key to both tabs
-    const saved = localStorage.getItem('openai_api_key');
-    if(saved){
-      document.getElementById('hsa-openaiKey').value = saved;
-      document.getElementById('hsa-rememberKey').checked = true;
-      document.getElementById('wa-openaiKey').value = saved;
-      document.getElementById('wa-rememberKey').checked = true;
-    }
 
   }catch(e){
     hsaStatus.textContent = "❌ Failed to initialize: " + (e?.message||e);
@@ -720,14 +749,14 @@ def wa_coach_response(context, prompt):
   }
 }
 
-/* ====================== SHARED HELPERS ====================== */
+/* ====================== SHARED HELPERS & RENDERERS ====================== */
 function pct(n,t){ return t ? Math.round((n/t)*100) : 0; }
 function renderRowsFromJson(jsonStr, valueKey, unit, badgeClass){
   const list=document.createElement('div'); list.className='list-group list-compact';
   let rows=[]; try{rows=JSON.parse(jsonStr||"[]");}catch{rows=[];}
   if(!rows.length){list.innerHTML='<div class="text-secondary small"><i>None</i></div>'; return list;}
   rows.forEach(r=>{
-    const when=r.Cycle_start_time||r.Date||'—';
+    const when = r.Date || r.Cycle_start_time || r.workout_start_time || r.DateTime || r.Time || '—';
     const raw=r[valueKey];
     const val=(typeof raw==='number') ? raw.toFixed(0) : (raw ?? '—');
     const item=document.createElement('div'); item.className='list-group-item';
@@ -770,6 +799,7 @@ document.getElementById('hsa-csvFile').addEventListener('change', e=>{
   document.getElementById('hsa-error').textContent="";
   if(e.target.files.length>0){ document.getElementById('hsa-status').textContent=`📄 Selected: ${e.target.files[0].name}`; }
 });
+
 document.getElementById('hsa-analyzeBtn').addEventListener('click', async ()=>{
   if(!HSA_READY){ document.getElementById('hsa-error').textContent="⏳ Please wait for Python environment..."; return; }
   const file=document.getElementById('hsa-csvFile').files[0];
@@ -777,10 +807,15 @@ document.getElementById('hsa-analyzeBtn').addEventListener('click', async ()=>{
   if(!file.name.toLowerCase().endsWith('.csv')){ document.getElementById('hsa-error').textContent="📄 Please upload a CSV (.csv)."; return; }
   const raw=await file.text(); if(!raw.trim()){ document.getElementById('hsa-error').textContent="📄 The uploaded file appears to be empty."; return; }
   const csvEsc=toPyTripleQuoted(raw);
+
+  const dFrom = document.getElementById('hsa-dateFrom').value || "";
+  const dTo   = document.getElementById('hsa-dateTo').value || "";
+
   const status=document.getElementById('hsa-status');
   try{
     status.textContent="🔄 Processing WHOOP data..."; status.className="text-primary small mt-2";
-    const result = PY.runPython(`hsa_process_whoop_csv("""${csvEsc}""")`).toJs({dict_hook:Object});
+    const py = `hsa_process_whoop_csv("""${csvEsc}""", start_date="${dFrom}", end_date="${dTo}")`;
+    const result = PY.runPython(py).toJs({dict_hook:Object});
     const d=result;
 
     document.getElementById('hsa-barChart').src="data:image/png;base64,"+d.bar_chart;
@@ -805,9 +840,9 @@ document.getElementById('hsa-analyzeBtn').addEventListener('click', async ()=>{
 
     const ul=document.getElementById('hsa-qi-notable'); ul.innerHTML="";
     const n=d.notables||{};
-    if(n.best_hrv) ul.innerHTML+=`<li>Best HRV: <b>${n.best_hrv.value.toFixed(1)}</b> ms on <span class="text-secondary">${n.best_hrv.when}</span></li>`;
-    if(n.worst_rest_hr) ul.innerHTML+=`<li>Highest Rest HR: <b>${n.worst_rest_hr.value.toFixed(1)}</b> bpm on <span class="text-secondary">${n.worst_rest_hr.when}</span></li>`;
-    if(n.best_sleep_perf) ul.innerHTML+=`<li>Best Sleep Performance: <b>${n.best_sleep_perf.value.toFixed(1)}</b>% on <span class="text-secondary">${n.best_sleep_perf.when}</span></li>`;
+    if(n?.best_hrv) ul.innerHTML+=`<li>Best HRV: <b>${n.best_hrv.value.toFixed(1)}</b> ms on <span class="text-secondary">${n.best_hrv.when}</span></li>`;
+    if(n?.worst_rest_hr) ul.innerHTML+=`<li>Highest Rest HR: <b>${n.worst_rest_hr.value.toFixed(1)}</b> bpm on <span class="text-secondary">${n.worst_rest_hr.when}</span></li>`;
+    if(n?.best_sleep_perf) ul.innerHTML+=`<li>Best Sleep Performance: <b>${n.best_sleep_perf.value.toFixed(1)}</b>% on <span class="text-secondary">${n.best_sleep_perf.when}</span></li>`;
     if(!ul.innerHTML) ul.innerHTML="<li><i>No notable days computed.</i></li>";
 
     document.getElementById('hsa-recoveryTotal').textContent=`${recTotal} days`;
@@ -848,8 +883,9 @@ document.getElementById('hsa-analyzeBtn').addEventListener('click', async ()=>{
     console.error(e);
   }
 });
+
 document.getElementById('hsa-clearBtn').addEventListener('click', ()=>{
-  HSA_CONTEXT=""; document.getElementById('hsa-metricsCard').classList.add('d-none');
+  document.getElementById('hsa-metricsCard').classList.add('d-none');
   document.getElementById('hsa-noContext').style.display='block';
   document.getElementById('hsa-ctx-badge').className="badge text-bg-secondary ms-2";
   document.getElementById('hsa-ctx-badge').textContent="Context: False";
@@ -860,48 +896,45 @@ document.getElementById('hsa-clearBtn').addEventListener('click', ()=>{
   document.getElementById('hsa-status').textContent="✅ Ready to analyze your WHOOP data!";
   document.getElementById('hsa-status').className="text-success small mt-2";
 });
+
 document.getElementById('hsa-debugBtn').addEventListener('click', ()=> alert("🐛 DEBUG INFO: Pyodide ready = "+(!!PY)));
+
+// Build context from live stats into the prompt box (health)
+function buildHealthContext(){
+  const days = document.getElementById('hsa-qi-days').textContent || '';
+  const avgRec = document.getElementById('hsa-qi-avg-recov').textContent || '';
+  const avgHRV = document.getElementById('hsa-qi-avg-hrv').textContent || '';
+  const lowPct = document.getElementById('hsa-qi-lowrecov-pct').textContent || '';
+  const highDebtPct = document.getElementById('hsa-qi-highdebt-pct').textContent || '';
+  const best = document.getElementById('hsa-bestRecovery').innerText.trim().split('\n').slice(0,3).join(' | ') || '';
+  const worst = document.getElementById('hsa-worstRecovery').innerText.trim().split('\n').slice(0,3).join(' | ') || '';
+  const highDebt = document.getElementById('hsa-highestSleepDebt').innerText.trim().split('\n').slice(0,3).join(' | ') || '';
+  return `WHOOP Summary -> Days: ${days}, Avg Recovery: ${avgRec}, Avg HRV: ${avgHRV}, Low Recovery %: ${lowPct}, High Sleep Debt %: ${highDebtPct}. Best Recovery: [${best}]. Worst Recovery: [${worst}]. Highest Sleep Debt: [${highDebt}]. Provide specific coaching steps.`
+}
+document.getElementById('hsa-insertCtx').addEventListener('click', ()=>{
+  document.getElementById('hsa-promptBox').value = buildHealthContext();
+});
+
 document.getElementById('hsa-askBtn').addEventListener('click', async ()=>{
   const prompt=document.getElementById('hsa-promptBox').value.trim();
   const model=document.getElementById('hsa-openaiModel').value;
-  if(!prompt){ document.getElementById('hsa-error').textContent="💬 Please enter a question about your health data."; return; }
-  if(!PY){ document.getElementById('hsa-error').textContent="⏳ Python environment not ready yet."; return; }
-
+  if(!prompt){ document.getElementById('hsa-error').textContent="💬 Please enter a question or click Insert Context."; return; }
   try{
     document.getElementById('hsa-error').textContent="";
-    const recDist=document.getElementById('hsa-recoveryTotal').textContent;
-    const sdDist =document.getElementById('hsa-sleepDebtTotal').textContent;
-    const qi={
-      days: document.getElementById('hsa-qi-days').textContent,
-      avgRecovery: document.getElementById('hsa-qi-avg-recov').textContent,
-      avgHRV: document.getElementById('hsa-qi-avg-hrv').textContent,
-      pctLowRecovery: document.getElementById('hsa-qi-lowrecov-pct').textContent,
-      pctHighSleepDebt: document.getElementById('hsa-qi-highdebt-pct').textContent
-    };
-    const contextBlob = `Days=${qi.days}; AvgRecovery=${qi.avgRecovery}; AvgHRV=${qi.avgHRV}; LowRecovery%=${qi.pctLowRecovery}; HighSleepDebt%=${qi.pctHighSleepDebt}; RecoveryTotal=${recDist}; SleepDebtTotal=${sdDist}.`;
-
-    // Remember key (only for the user's custom key)
-    const customKey = document.getElementById('hsa-openaiKey').value.trim();
-    if(document.getElementById('hsa-rememberKey').checked && customKey){ localStorage.setItem('openai_api_key', customKey); }
-    else { localStorage.removeItem('openai_api_key'); }
-
     const askStatus=document.getElementById('hsa-askStatus');
     askStatus.innerHTML=`<span class="spinner"></span> contacting OpenAI…`;
-    const system = `You are a helpful health & sleep coach. Use the provided WHOOP summary context to answer concretely with specific actions. If numbers are referenced, cite them from the context. Avoid medical diagnoses. Context: """${contextBlob}"""`;
-    let reply="";
-    const key = getEffectiveKey('hsa');
 
-    if(key){
-      const res = await fetch("https://api.openai.com/v1/chat/completions",{
-        method:"POST", headers:{ "Content-Type":"application/json", "Authorization":"Bearer "+key },
-        body: JSON.stringify({ model, messages:[{role:"system",content:system},{role:"user",content:prompt}], temperature:0.7 })
-      });
-      if(!res.ok){ const t=await res.text(); throw new Error(`OpenAI error ${res.status}: ${t}`); }
-      const data = await res.json(); askStatus.textContent="✅";
-      reply = data.choices?.[0]?.message?.content ?? "(no content)";
-    }else{
-      reply = "⚠️ No API key is available. Either set the built-in key in code or check “Use my key” and enter yours.";
-    }
+    const key = await getOpenAIKey(); // throws if invalid/non-ASCII
+    const system = "You are a helpful health & sleep coach. Answer concisely with concrete actions.";
+
+    const res = await fetch("https://api.openai.com/v1/chat/completions",{
+      method:"POST",
+      headers:{ "Content-Type":"application/json", "Authorization":"Bearer "+key },
+      body: JSON.stringify({ model, messages:[{role:"system",content:system},{role:"user",content:prompt}], temperature:0.7 })
+    });
+    if(!res.ok){ const t=await res.text(); throw new Error(`OpenAI error ${res.status}: ${t}`); }
+    const data = await res.json(); askStatus.textContent="✅";
+    const reply = data.choices?.[0]?.message?.content ?? "(no content)";
     document.getElementById('hsa-answerHr').classList.remove('d-none');
     document.getElementById('hsa-answerDiv').classList.remove('d-none');
     document.getElementById('hsa-answer').textContent = reply;
@@ -922,8 +955,9 @@ document.getElementById('wa-analyzeBtn').addEventListener('click', async ()=>{
     document.getElementById('wa-error').textContent="";
     const raw=await file.text();
     const csvEsc=toPyTripleQuoted(raw);
-    const data = PY.runPython(`wa_process_csv("""${csvEsc}""")`).toJs({dict_hook:Object});
-    WA_CONTEXT = data.context || "";
+    const dFrom = document.getElementById('wa-dateFrom').value || "";
+    const dTo   = document.getElementById('wa-dateTo').value || "";
+    const data = PY.runPython(`wa_process_csv("""${csvEsc}""", start_date="${dFrom}", end_date="${dTo}")`).toJs({dict_hook:Object});
 
     if(data.bar_chart) document.getElementById('wa-barImg').src="data:image/png;base64,"+data.bar_chart;
     if(data.pie_activity) document.getElementById('wa-pieActivityImg').src="data:image/png;base64,"+data.pie_activity;
@@ -935,7 +969,7 @@ document.getElementById('wa-analyzeBtn').addEventListener('click', async ()=>{
     const durChip=document.getElementById('wa-qi-dur-band');
     const durVal=agg.duration_min_mean||0;
     durChip.textContent = durVal>=60 ? "long" : durVal>=30 ? "moderate" : "short";
-    durChip.className = `metric-chip ${ durVal>=60 ? 'chip-ok' : durVal>=30 ? 'chip-warn' : 'chip-bad' }`;
+    durChip.className = `metric-chip ${ durVal>=60 ? 'success' : durVal>=30 ? 'warning' : 'danger' }`;
     document.getElementById('wa-qi-hr').textContent = `${agg.avg_hr_mean ? agg.avg_hr_mean.toFixed(0) : '—'} / ${agg.max_hr_mean ? agg.max_hr_mean.toFixed(0) : '—'} bpm`;
     document.getElementById('wa-qi-weekly-min').textContent = `${(agg.weekly_minutes||0).toFixed(0)} min`;
     document.getElementById('wa-qi-top-activity').textContent = (data.top_activity ? `${data.top_activity} (${data.top_count})` : '—');
@@ -944,8 +978,7 @@ document.getElementById('wa-analyzeBtn').addEventListener('click', async ()=>{
     const gMinVal=Math.round(agg.weekly_minutes||0);
     const gMinPct=Math.min(100, Math.round((gMinVal/goalMin)*100));
     document.getElementById('wa-goalMinLbl').textContent=`${gMinPct}%`;
-    const minBar=document.getElementById('wa-goalMinBar');
-    minBar.style.width=gMinPct+'%'; minBar.className=waBarClassByPct(gMinPct);
+    const minBar=document.getElementById('wa-goalMinBar'); minBar.style.width=gMinPct+'%'; minBar.className=waBarClassByPct(gMinPct);
     document.getElementById('wa-goalMinVal').textContent=gMinVal;
 
     const gSesVal=agg.weekly_sessions||0;
@@ -982,7 +1015,6 @@ document.getElementById('wa-analyzeBtn').addEventListener('click', async ()=>{
 });
 
 document.getElementById('wa-clearBtn').addEventListener('click', ()=>{
-  WA_CONTEXT="";
   document.getElementById('wa-metricsCard').classList.add('d-none');
   document.getElementById('wa-noContext').style.display='block';
   document.getElementById('wa-ctx-badge').className="badge text-bg-secondary ms-2";
@@ -997,96 +1029,56 @@ document.getElementById('wa-clearBtn').addEventListener('click', ()=>{
 });
 
 document.getElementById('wa-debugBtn').addEventListener('click', ()=>{
-  const info={ready:!!PY, has_context:!!WA_CONTEXT, context_length: WA_CONTEXT.length};
+  const info={ready:!!PY};
   alert(JSON.stringify(info,null,2));
 });
 
-// Ask (Workout)
+// Build context from live stats into the prompt box (workout)
+function buildWorkoutContext(){
+  const days = document.getElementById('wa-qi-days').textContent || '';
+  const avgDur = document.getElementById('wa-qi-avg-dur').textContent || '';
+  const hr = document.getElementById('wa-qi-hr').textContent || '';
+  const weeklyMin = document.getElementById('wa-qi-weekly-min').textContent || '';
+  const topAct = document.getElementById('wa-qi-top-activity').textContent || '';
+  const best = document.getElementById('wa-bestList').innerText.trim().split('\n').slice(0,3).join(' | ') || '';
+  const worst = document.getElementById('wa-worstList').innerText.trim().split('\n').slice(0,3).join(' | ') || '';
+  return `Workout Summary -> ${days}, Avg Duration: ${avgDur}, HR (avg/max): ${hr}, Weekly Minutes: ${weeklyMin}, Top Activity: ${topAct}. Longest: [${best}]. Shortest: [${worst}]. Give a focused weekly plan and 3 quick wins.`
+}
+document.getElementById('wa-insertCtx').addEventListener('click', ()=>{
+  document.getElementById('wa-promptBox').value = buildWorkoutContext();
+});
+
 document.getElementById('wa-askBtn').addEventListener('click', async () => {
-  if (!WA_CONTEXT) { document.getElementById('wa-error').textContent = "Upload a CSV first."; return; }
   const prompt = document.getElementById('wa-promptBox').value.trim();
   const model  = document.getElementById('wa-openaiModel').value;
-  if (!prompt) { document.getElementById('wa-error').textContent = "Enter a question."; return; }
+  if (!prompt) { document.getElementById('wa-error').textContent = "Enter a question or click Insert Context."; return; }
 
   try {
     document.getElementById('wa-error').textContent = "";
-
-    const qi = {
-      days:       document.getElementById('wa-qi-days').textContent,
-      avgDur:     document.getElementById('wa-qi-avg-dur').textContent,
-      hr:         document.getElementById('wa-qi-hr').textContent,
-      weeklyMin:  document.getElementById('wa-qi-weekly-min').textContent,
-      topAct:     document.getElementById('wa-qi-top-activity').textContent
-    };
-    const goalMin  = document.getElementById('wa-goalMinVal').textContent;
-    const goalSes  = document.getElementById('wa-goalSessionsVal').textContent;
-    const goalDist = document.getElementById('wa-goalDistVal').textContent;
-
-    const widgetContext =
-      `Workouts=${qi.days}; AvgDuration=${qi.avgDur}; HR=${qi.hr}; ` +
-      `WeeklyMinutes=${qi.weeklyMin}; TopActivity=${qi.topAct}; ` +
-      `Last7d: minutes=${goalMin}, sessions=${goalSes}, distance_km=${goalDist}.`;
-
-    const fullContext = WA_CONTEXT + "\n" + widgetContext;
-
-    // Remember key (only the user's custom one)
-    const customKey = document.getElementById('wa-openaiKey').value.trim();
-    if (document.getElementById('wa-rememberKey').checked && customKey) {
-      localStorage.setItem('openai_api_key', customKey);
-    } else {
-      localStorage.removeItem('openai_api_key');
-    }
-
     const askStatus = document.getElementById('wa-askStatus');
     askStatus.innerHTML = `<span class="spinner"></span> contacting OpenAI…`;
-    let reply = "";
 
-    const key = getEffectiveKey('wa');
+    const key = await getOpenAIKey();
+    const system = "You are a helpful workout coach. Use the provided workout summary context to answer with clear, specific actions.";
 
-    if (key) {
-      const system =
-        `You are a helpful workout coach. Use the provided workout summary context ` +
-        `to answer with clear, specific actions. Avoid medical diagnoses. ` +
-        `Context: """${fullContext}"""`;
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "system", content: system }, { role: "user", content: prompt }],
+        temperature: 0.7
+      })
+    });
 
-      const res = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
-        body: JSON.stringify({
-          model,
-          messages: [{ role: "system", content: system }, { role: "user", content: prompt }],
-          temperature: 0.7
-        })
-      });
-
-      if (!res.ok) {
-        const t = await res.text();
-        throw new Error(`OpenAI error ${res.status}: ${t}`);
-      }
-
-      const data = await res.json();
-      askStatus.textContent = "✅";
-      reply = data.choices?.[0]?.message?.content ?? "(no content)";
-    } else {
-      // Local fallback via Python helper
-      try {
-        const escapedContext = toPyTripleQuoted(fullContext);
-        const escapedPrompt  = toPyTripleQuoted(prompt);
-        const _tmp = PY.runPython(`wa_coach_response("""${escapedContext}""", """${escapedPrompt}""")`);
-        reply = (typeof _tmp?.toJs === 'function') ? _tmp.toJs() : String(_tmp);
-        askStatus.textContent = "✅ local";
-      } catch (pyError) {
-        console.error('Python execution error:', pyError);
-        reply = "🏃 WORKOUT COACHING INSIGHTS:\n\n" +
-                "💡 KEY RECOMMENDATIONS:\n" +
-                "• Keep weekly volume within ±15% of current average\n" +
-                "• Alternate high and low intensity days\n" +
-                "• Include 1–2 complete rest days per week\n" +
-                "• Progress distance/duration gradually (≈10% rule)\n\n" +
-                "🎯 Ask about: plans, recovery, pacing, or progression.";
-        askStatus.textContent = "✅ fallback";
-      }
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error(`OpenAI error ${res.status}: ${t}`);
     }
+
+    const data = await res.json();
+    askStatus.textContent = "✅";
+    const reply = data.choices?.[0]?.message?.content ?? "(no content)";
 
     document.getElementById('wa-answerHr').classList.remove('d-none');
     document.getElementById('wa-answerDiv').classList.remove('d-none');
@@ -1098,7 +1090,6 @@ document.getElementById('wa-askBtn').addEventListener('click', async () => {
     console.error(e);
   }
 });
-
 
 /* ====================== BOOT ====================== */
 document.addEventListener('DOMContentLoaded', initPy);
