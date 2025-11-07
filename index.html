@@ -32,6 +32,138 @@
     .bar-ok{background-image:linear-gradient(90deg,#16a34a,#22c55e)}
     .bar-warn{background-image:linear-gradient(90deg,#FF9800,#FFB74D)}
     .bar-bad{background-image:linear-gradient(90deg,#ef4444,#f97393)}
+
+    /* ChatGPT-style Chat Interface */
+    .chat-container {
+      height: 400px;
+      overflow-y: auto;
+      border: 1px solid #e1e5e9;
+      border-radius: 8px;
+      padding: 16px;
+      background: #f8f9fa;
+      margin-bottom: 16px;
+    }
+    
+    .chat-message {
+      margin-bottom: 16px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+    
+    .chat-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    
+    .user-avatar {
+      background: #2563eb;
+      color: white;
+    }
+    
+    .assistant-avatar {
+      background: #10b981;
+      color: white;
+    }
+    
+    .chat-content {
+      flex: 1;
+      padding: 12px 16px;
+      border-radius: 18px;
+      font-size: 14px;
+      line-height: 1.4;
+      word-wrap: break-word;
+    }
+    
+    .user-message .chat-content {
+      background: #2563eb;
+      color: white;
+      margin-left: auto;
+      max-width: 80%;
+    }
+    
+    .assistant-message .chat-content {
+      background: #f1f5f9;
+      color: #334155;
+      border: 1px solid #e2e8f0;
+      max-width: 85%;
+    }
+    
+    .typing-indicator {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 8px 12px;
+      background: #f1f5f9;
+      border-radius: 18px;
+      max-width: fit-content;
+    }
+    
+    .typing-dot {
+      width: 6px;
+      height: 6px;
+      background: #64748b;
+      border-radius: 50%;
+      animation: typing 1.4s infinite ease-in-out;
+    }
+    
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+    
+    @keyframes typing {
+      0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+      30% { transform: translateY(-10px); opacity: 1; }
+    }
+    
+    .chat-welcome {
+      text-align: center;
+      padding: 2rem;
+      color: #64748b;
+    }
+    
+    .chat-welcome-icon {
+      font-size: 2rem;
+      margin-bottom: 1rem;
+    }
+    
+    .send-text, .loading-text {
+      transition: opacity 0.2s;
+    }
+    
+    .chat-controls {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    /* Clean AI Response Formatting */
+    .assistant-message .chat-content {
+      background: #f8fafc;
+      color: #334155;
+      border: 1px solid #e2e8f0;
+      max-width: 85%;
+      line-height: 1.5;
+    }
+
+    .assistant-message .chat-content p {
+      margin: 0 0 8px 0;
+    }
+
+    .assistant-message .chat-content p:last-child {
+      margin-bottom: 0;
+    }
+
+    .assistant-message .chat-content strong {
+      color: #1e40af;
+      font-weight: 600;
+    }
   </style>
 </head>
 <body>
@@ -194,33 +326,45 @@
       <!-- Chat -->
       <div class="card card-soft">
         <div class="card-body">
-          <h5 class="card-title">2) Chat about this data</h5>
-          <div id="hsa-noContext" class="text-secondary">Upload a CSV first to give the assistant context. You can still type a question—I'll remind you.</div>
-
-          <div class="row g-2 align-items-end mb-2">
-            <div class="col-md-6">
-              <label class="form-label mb-1">Model</label>
-              <select id="hsa-openaiModel" class="form-select">
-                <option value="gpt-4o-mini" selected>gpt-4o-mini (fast, cheap)</option>
-                <option value="gpt-4o">gpt-4o (best quality)</option>
-                <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-              </select>
-            </div>
-            <div class="col-md-6 text-end">
-              <button id="hsa-insertCtx" class="btn btn-outline-secondary mt-4">Insert Context</button>
-            </div>
+          <h5 class="card-title">2) 💬 Chat about this data 
+            <span id="hsa-ctx-badge" class="badge text-bg-secondary ms-2">Context: False</span>
+          </h5>
+          <div id="hsa-noContext" class="text-secondary mb-3">Upload a CSV first to give the assistant context. You can still type a question—I'll remind you.</div>
+          
+          <!-- Chat Controls -->
+          <div class="chat-controls">
+            <button id="hsa-resetChat" class="btn btn-outline-secondary btn-sm" type="button">
+              🔄 Reset Chat
+            </button>
+            <button id="hsa-stopGeneration" class="btn btn-outline-danger btn-sm d-none" type="button">
+              ⏹️ Stop
+            </button>
+            <button id="hsa-insertCtx" class="btn btn-outline-primary btn-sm">📊 Insert Context</button>
           </div>
 
-          <textarea id="hsa-promptBox" class="form-control" rows="4" placeholder="Ask a question or click ‘Insert Context’ to start…"></textarea>
-          <div class="mt-3 d-flex gap-2">
-            <button id="hsa-askBtn" class="btn btn-primary" disabled>Ask</button>
-            <span id="hsa-askStatus" class="text-secondary small"></span>
+          <!-- Chat Messages Container -->
+          <div id="hsa-chatContainer" class="chat-container">
+            <div class="chat-welcome">
+              <div class="chat-welcome-icon">🩺✨</div>
+              <div>Welcome! I'm your AI health & sleep analysis assistant.</div>
+              <div class="small mt-2">Upload your health data CSV and ask me about patterns, insights, or recommendations.</div>
+            </div>
           </div>
-          <hr class="d-none" id="hsa-answerHr">
-          <div id="hsa-answerDiv" class="d-none">
-            <div><b>Assistant:</b></div>
-            <pre id="hsa-answer" class="monospace"></pre>
-          </div>
+
+
+
+          <!-- Chat Input -->
+          <div class="input-group">
+            <textarea id="hsa-promptBox" class="form-control" rows="2" placeholder="Ask about your health data..." style="resize: none;"></textarea>
+            <button id="hsa-askBtn" class="btn btn-primary" type="button">
+              <span class="send-text">Send</span>
+              <span class="loading-text d-none">
+                <span class="spinner-border spinner-border-sm me-1"></span>
+                Analyzing...
+              </span>
+            </button>
+          </div></textarea>
+          <div id="hsa-askStatus" class="form-text small mt-1"></div>
         </div>
       </div>
     </div>
@@ -361,30 +505,43 @@
       <!-- Chat -->
       <div class="card card-soft">
         <div class="card-body">
-          <h5 class="card-title">2) 💬 Chat about your data</h5>
-          <div id="wa-noContext" class="text-secondary">Upload a CSV first for context.</div>
+          <h5 class="card-title">2) 💬 Chat about your data 
+            <span id="wa-ctx-badge" class="badge text-bg-secondary ms-2">Context: False</span>
+          </h5>
+          <div id="wa-noContext" class="text-secondary mb-3">Upload a CSV first for context.</div>
+          
+          <!-- Chat Controls -->
+          <div class="chat-controls">
+            <button id="wa-resetChat" class="btn btn-outline-secondary btn-sm" type="button">
+              🔄 Reset Chat
+            </button>
+            <button id="wa-stopGeneration" class="btn btn-outline-danger btn-sm d-none" type="button">
+              ⏹️ Stop
+            </button>
+            <button id="wa-insertCtx" class="btn btn-outline-primary btn-sm">📊 Insert Context</button>
+          </div>
 
-          <div class="row g-2 align-items-end mb-2">
-            <div class="col-md-6">
-              <label class="form-label mb-1">Model</label>
-              <select id="wa-openaiModel" class="form-select">
-                <option value="gpt-4o-mini" selected>gpt-4o-mini (fast, affordable)</option>
-                <option value="gpt-4o">gpt-4o (higher quality)</option>
-                <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-              </select>
-            </div>
-            <div class="col-md-6 text-end">
-              <button id="wa-insertCtx" class="btn btn-outline-secondary mt-4">Insert Context</button>
+          <!-- Chat Messages Container -->
+          <div id="wa-chatContainer" class="chat-container">
+            <div class="chat-welcome">
+              <div class="chat-welcome-icon">🏃✨</div>
+              <div>Welcome! I'm your AI workout analysis assistant.</div>
+              <div class="small mt-2">Upload your workout data CSV and ask me about performance, trends, or training recommendations.</div>
             </div>
           </div>
 
-          <textarea id="wa-promptBox" class="form-control mt-2" rows="3" placeholder="Ask about your workout data…"></textarea>
-          <div class="mt-3 d-flex gap-2 align-items-center">
-            <button id="wa-askBtn" class="btn btn-primary" disabled>Ask</button>
-            <span id="wa-askStatus" class="text-secondary small"></span>
+          <!-- Chat Input -->
+          <div class="input-group">
+            <textarea id="wa-promptBox" class="form-control" rows="2" placeholder="Ask about your workout data..." style="resize: none;"></textarea>
+            <button id="wa-askBtn" class="btn btn-primary" type="button">
+              <span class="send-text">Send</span>
+              <span class="loading-text d-none">
+                <span class="spinner-border spinner-border-sm me-1"></span>
+                Analyzing...
+              </span>
+            </button>
           </div>
-          <hr class="d-none" id="wa-answerHr">
-          <div id="wa-answerDiv" class="d-none"><b>Assistant:</b><pre id="wa-answer" class="mono"></pre></div>
+          <div id="wa-askStatus" class="form-text small mt-1"></div>
         </div>
       </div>
     </div>
@@ -886,15 +1043,30 @@ document.getElementById('hsa-analyzeBtn').addEventListener('click', async ()=>{
 
 document.getElementById('hsa-clearBtn').addEventListener('click', ()=>{
   document.getElementById('hsa-metricsCard').classList.add('d-none');
-  document.getElementById('hsa-noContext').style.display='block';
-  document.getElementById('hsa-ctx-badge').className="badge text-bg-secondary ms-2";
-  document.getElementById('hsa-ctx-badge').textContent="Context: False";
-  ['hsa-error','hsa-answer'].forEach(id=>document.getElementById(id).textContent="");
-  document.getElementById('hsa-answerDiv').classList.add('d-none'); document.getElementById('hsa-answerHr').classList.add('d-none');
+  const noContext = document.getElementById('hsa-noContext');
+  if (noContext) noContext.style.display='block';
+  const ctxBadge = document.getElementById('hsa-ctx-badge');
+  if (ctxBadge) {
+    ctxBadge.className="badge text-bg-secondary ms-2";
+    ctxBadge.textContent="Context: False";
+  }
+  const errorEl = document.getElementById('hsa-error');
+  if (errorEl) errorEl.textContent="";
   document.getElementById('hsa-csvFile').value="";
   document.getElementById('hsa-promptBox').value="";
   document.getElementById('hsa-status').textContent="✅ Ready to analyze your WHOOP data!";
   document.getElementById('hsa-status').className="text-success small mt-2";
+  // Reset chat
+  hsaChatHistory = [];
+  const container = document.getElementById('hsa-chatContainer');
+  container.innerHTML = `
+    <div class="chat-welcome">
+      <div class="chat-welcome-icon">🩺✨</div>
+      <div>Welcome! I'm your AI health & sleep analysis assistant.</div>
+      <div class="small mt-2">Upload your health data CSV and ask me about patterns, insights, or recommendations.</div>
+    </div>
+  `;
+  document.getElementById('hsa-askStatus').textContent = '';
 });
 
 document.getElementById('hsa-debugBtn').addEventListener('click', ()=> alert("🐛 DEBUG INFO: Pyodide ready = "+(!!PY)));
@@ -915,33 +1087,174 @@ document.getElementById('hsa-insertCtx').addEventListener('click', ()=>{
   document.getElementById('hsa-promptBox').value = buildHealthContext();
 });
 
+// Health & Sleep Analyzer Chat Variables
+let hsaChatHistory = [];
+let hsaAbortController = null;
+
+// Format AI response - clean and readable
+function formatAIResponse(content) {
+  // Clean up excessive whitespace and newlines
+  let formatted = content
+    .replace(/\n{3,}/g, '\n\n')  // Replace 3+ newlines with just 2
+    .replace(/\s+\n/g, '\n')     // Remove trailing spaces before newlines
+    .trim();
+
+  // Simple formatting for readability
+  formatted = formatted
+    // Bold text **text**
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    // Convert double newlines to paragraph breaks
+    .replace(/\n\n/g, '</p><p>')
+    // Convert single newlines to line breaks
+    .replace(/\n/g, '<br>');
+
+  // Wrap in paragraph if it doesn't start with one
+  if (!formatted.startsWith('<p>')) {
+    formatted = '<p>' + formatted + '</p>';
+  }
+
+  return formatted;
+}
+
+// Add chat message to container with beautiful formatting
+function addHsaChatMessage(role, content) {
+  const container = document.getElementById('hsa-chatContainer');
+  const messageDiv = document.createElement('div');
+  messageDiv.className = `chat-message ${role}-message`;
+  
+  const avatarDiv = document.createElement('div');
+  avatarDiv.className = `chat-avatar ${role}-avatar`;
+  avatarDiv.textContent = role === 'user' ? 'You' : 'AI';
+  
+  const contentDiv = document.createElement('div');
+  contentDiv.className = 'chat-content';
+  
+  if (role === 'assistant') {
+    // Format AI responses beautifully
+    contentDiv.innerHTML = formatAIResponse(content);
+  } else {
+    // Keep user messages as simple text
+    contentDiv.textContent = content;
+  }
+  
+  messageDiv.appendChild(avatarDiv);
+  messageDiv.appendChild(contentDiv);
+  container.appendChild(messageDiv);
+  
+  // Scroll to bottom
+  container.scrollTop = container.scrollHeight;
+  
+  // Remove welcome message if it exists
+  const welcome = container.querySelector('.chat-welcome');
+  if (welcome) welcome.remove();
+}
+
+// Reset chat function
+document.getElementById('hsa-resetChat').addEventListener('click', () => {
+  hsaChatHistory = [];
+  const container = document.getElementById('hsa-chatContainer');
+  container.innerHTML = `
+    <div class="chat-welcome">
+      <div class="chat-welcome-icon">🩺✨</div>
+      <div>Welcome! I'm your AI health & sleep analysis assistant.</div>
+      <div class="small mt-2">Upload your health data CSV and ask me about patterns, insights, or recommendations.</div>
+    </div>
+  `;
+  document.getElementById('hsa-askStatus').textContent = '';
+});
+
+// Stop generation function
+document.getElementById('hsa-stopGeneration').addEventListener('click', () => {
+  if (hsaAbortController) {
+    hsaAbortController.abort();
+    hsaAbortController = null;
+    document.getElementById('hsa-stopGeneration').classList.add('d-none');
+    document.querySelector('#hsa-askBtn .send-text').style.display = 'inline';
+    document.querySelector('#hsa-askBtn .loading-text').classList.add('d-none');
+    document.getElementById('hsa-askStatus').textContent = 'Generation stopped';
+  }
+});
+
 document.getElementById('hsa-askBtn').addEventListener('click', async ()=>{
   const prompt=document.getElementById('hsa-promptBox').value.trim();
-  const model=document.getElementById('hsa-openaiModel').value;
-  if(!prompt){ document.getElementById('hsa-error').textContent="💬 Please enter a question or click Insert Context."; return; }
+  if(!prompt){ 
+    document.getElementById('hsa-askStatus').textContent="💬 Please enter a question or click Insert Context."; 
+    return; 
+  }
+  
   try{
-    document.getElementById('hsa-error').textContent="";
-    const askStatus=document.getElementById('hsa-askStatus');
-    askStatus.innerHTML=`<span class="spinner"></span> contacting OpenAI…`;
+    document.getElementById('hsa-askStatus').textContent = "";
+    
+    // Update button state
+    const sendText = document.querySelector('#hsa-askBtn .send-text');
+    const loadingText = document.querySelector('#hsa-askBtn .loading-text');
+    sendText.style.display = 'none';
+    loadingText.classList.remove('d-none');
+    document.getElementById('hsa-stopGeneration').classList.remove('d-none');
+
+    // Add user message to chat
+    addHsaChatMessage('user', prompt);
+    hsaChatHistory.push({role: 'user', content: prompt});
 
     const key = await getOpenAIKey(); // throws if invalid/non-ASCII
-    const system = "You are a helpful health & sleep coach. Answer concisely with concrete actions.";
+    const system = "You are a helpful health & sleep coach. Give concise, actionable insights. Use short paragraphs and bullet points when helpful. Focus on key findings and specific recommendations.";
+
+    // Create abort controller for stop functionality
+    hsaAbortController = new AbortController();
 
     const res = await fetch("https://api.openai.com/v1/chat/completions",{
       method:"POST",
       headers:{ "Content-Type":"application/json", "Authorization":"Bearer "+key },
-      body: JSON.stringify({ model, messages:[{role:"system",content:system},{role:"user",content:prompt}], temperature:0.7 })
+      body: JSON.stringify({ 
+        model: "gpt-4.1", // Always use GPT-4.1 Advanced
+        messages:[{role:"system",content:system}, ...hsaChatHistory], 
+        temperature:0.3,  // Lower temperature for faster, more focused responses
+        max_tokens: 500   // Limit response length for faster delivery
+      }),
+      signal: hsaAbortController.signal
     });
+    
     if(!res.ok){ const t=await res.text(); throw new Error(`OpenAI error ${res.status}: ${t}`); }
-    const data = await res.json(); askStatus.textContent="✅";
+    const data = await res.json(); 
+    
     const reply = data.choices?.[0]?.message?.content ?? "(no content)";
-    document.getElementById('hsa-answerHr').classList.remove('d-none');
-    document.getElementById('hsa-answerDiv').classList.remove('d-none');
-    document.getElementById('hsa-answer').textContent = reply;
+    addHsaChatMessage('assistant', reply);
+    hsaChatHistory.push({role: 'assistant', content: reply});
+    
+    document.getElementById('hsa-askStatus').textContent="✅ Response complete";
+    document.getElementById('hsa-promptBox').value = ''; // Clear input
+    
   }catch(e){
-    document.getElementById('hsa-askStatus').textContent="";
-    document.getElementById('hsa-error').textContent="🤖 Chat error: "+e.message;
-    console.error(e);
+    if (e.name === 'AbortError') {
+      document.getElementById('hsa-askStatus').textContent="Generation stopped by user";
+    } else {
+      document.getElementById('hsa-askStatus').textContent="🤖 Chat error: "+e.message;
+      console.error(e);
+    }
+  } finally {
+    // Reset button state
+    const sendText = document.querySelector('#hsa-askBtn .send-text');
+    const loadingText = document.querySelector('#hsa-askBtn .loading-text');
+    sendText.style.display = 'inline';
+    loadingText.classList.add('d-none');
+    document.getElementById('hsa-stopGeneration').classList.add('d-none');
+    hsaAbortController = null;
+  }
+});
+
+// Add Enter key support for HSA chat
+document.getElementById('hsa-promptBox').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    document.getElementById('hsa-askBtn').click();
+  }
+});
+
+// Add Enter key support for WA chat
+document.getElementById('wa-promptBox').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    document.getElementById('wa-askBtn').click();
   }
 });
 
@@ -1016,16 +1329,28 @@ document.getElementById('wa-analyzeBtn').addEventListener('click', async ()=>{
 
 document.getElementById('wa-clearBtn').addEventListener('click', ()=>{
   document.getElementById('wa-metricsCard').classList.add('d-none');
-  document.getElementById('wa-noContext').style.display='block';
-  document.getElementById('wa-ctx-badge').className="badge text-bg-secondary ms-2";
-  document.getElementById('wa-ctx-badge').textContent="Context: False";
-  document.getElementById('wa-error').textContent="";
-  document.getElementById('wa-answer').textContent="";
-  document.getElementById('wa-answerDiv').classList.add('d-none');
-  document.getElementById('wa-answerHr').classList.add('d-none');
+  const noContext = document.getElementById('wa-noContext');
+  if (noContext) noContext.style.display='block';
+  const ctxBadge = document.getElementById('wa-ctx-badge');
+  if (ctxBadge) {
+    ctxBadge.className="badge text-bg-secondary ms-2";
+    ctxBadge.textContent="Context: False";
+  }
+  const errorEl = document.getElementById('wa-error');
+  if (errorEl) errorEl.textContent="";
   document.getElementById('wa-csvFile').value="";
   document.getElementById('wa-status').textContent="✅ Ready to analyze!";
   document.getElementById('wa-askStatus').textContent="";
+  // Reset chat
+  waChatHistory = [];
+  const container = document.getElementById('wa-chatContainer');
+  container.innerHTML = `
+    <div class="chat-welcome">
+      <div class="chat-welcome-icon">🏃✨</div>
+      <div>Welcome! I'm your AI workout analysis assistant.</div>
+      <div class="small mt-2">Upload your workout data CSV and ask me about performance, trends, or training recommendations.</div>
+    </div>
+  `;
 });
 
 document.getElementById('wa-debugBtn').addEventListener('click', ()=>{
@@ -1048,27 +1373,106 @@ document.getElementById('wa-insertCtx').addEventListener('click', ()=>{
   document.getElementById('wa-promptBox').value = buildWorkoutContext();
 });
 
+// Workout Analyzer Chat Variables
+let waChatHistory = [];
+let waAbortController = null;
+
+// Add chat message to container with beautiful formatting
+function addWaChatMessage(role, content) {
+  const container = document.getElementById('wa-chatContainer');
+  const messageDiv = document.createElement('div');
+  messageDiv.className = `chat-message ${role}-message`;
+  
+  const avatarDiv = document.createElement('div');
+  avatarDiv.className = `chat-avatar ${role}-avatar`;
+  avatarDiv.textContent = role === 'user' ? 'You' : 'AI';
+  
+  const contentDiv = document.createElement('div');
+  contentDiv.className = 'chat-content';
+  
+  if (role === 'assistant') {
+    // Format AI responses beautifully
+    contentDiv.innerHTML = formatAIResponse(content);
+  } else {
+    // Keep user messages as simple text
+    contentDiv.textContent = content;
+  }
+  
+  messageDiv.appendChild(avatarDiv);
+  messageDiv.appendChild(contentDiv);
+  container.appendChild(messageDiv);
+  
+  // Scroll to bottom
+  container.scrollTop = container.scrollHeight;
+  
+  // Remove welcome message if it exists
+  const welcome = container.querySelector('.chat-welcome');
+  if (welcome) welcome.remove();
+}
+
+// Reset chat function
+document.getElementById('wa-resetChat').addEventListener('click', () => {
+  waChatHistory = [];
+  const container = document.getElementById('wa-chatContainer');
+  container.innerHTML = `
+    <div class="chat-welcome">
+      <div class="chat-welcome-icon">🏃✨</div>
+      <div>Welcome! I'm your AI workout analysis assistant.</div>
+      <div class="small mt-2">Upload your workout data CSV and ask me about performance, trends, or training recommendations.</div>
+    </div>
+  `;
+  document.getElementById('wa-askStatus').textContent = '';
+});
+
+// Stop generation function
+document.getElementById('wa-stopGeneration').addEventListener('click', () => {
+  if (waAbortController) {
+    waAbortController.abort();
+    waAbortController = null;
+    document.getElementById('wa-stopGeneration').classList.add('d-none');
+    document.querySelector('#wa-askBtn .send-text').style.display = 'inline';
+    document.querySelector('#wa-askBtn .loading-text').classList.add('d-none');
+    document.getElementById('wa-askStatus').textContent = 'Generation stopped';
+  }
+});
+
 document.getElementById('wa-askBtn').addEventListener('click', async () => {
   const prompt = document.getElementById('wa-promptBox').value.trim();
-  const model  = document.getElementById('wa-openaiModel').value;
-  if (!prompt) { document.getElementById('wa-error').textContent = "Enter a question or click Insert Context."; return; }
+  if (!prompt) { 
+    document.getElementById('wa-askStatus').textContent = "💬 Please enter a question or click Insert Context."; 
+    return; 
+  }
 
   try {
-    document.getElementById('wa-error').textContent = "";
-    const askStatus = document.getElementById('wa-askStatus');
-    askStatus.innerHTML = `<span class="spinner"></span> contacting OpenAI…`;
+    document.getElementById('wa-askStatus').textContent = "";
+    
+    // Update button state
+    const sendText = document.querySelector('#wa-askBtn .send-text');
+    const loadingText = document.querySelector('#wa-askBtn .loading-text');
+    sendText.style.display = 'none';
+    loadingText.classList.remove('d-none');
+    document.getElementById('wa-stopGeneration').classList.remove('d-none');
+
+    // Add user message to chat
+    addWaChatMessage('user', prompt);
+    waChatHistory.push({role: 'user', content: prompt});
 
     const key = await getOpenAIKey();
-    const system = "You are a helpful workout coach. Use the provided workout summary context to answer with clear, specific actions.";
+    const system = "You are a helpful workout coach. Give concise, actionable training advice. Use short paragraphs and bullet points when helpful. Focus on key performance insights and specific recommendations.";
+
+    // Create abort controller for stop functionality
+    waAbortController = new AbortController();
 
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
       body: JSON.stringify({
-        model,
-        messages: [{ role: "system", content: system }, { role: "user", content: prompt }],
-        temperature: 0.7
-      })
+        model: "gpt-4.1", // Always use GPT-4.1 Advanced
+        messages: [{ role: "system", content: system }, ...waChatHistory],
+        temperature: 0.3,  // Lower temperature for faster, more focused responses
+        max_tokens: 500    // Limit response length for faster delivery
+      }),
+      signal: waAbortController.signal
     });
 
     if (!res.ok) {
@@ -1077,17 +1481,28 @@ document.getElementById('wa-askBtn').addEventListener('click', async () => {
     }
 
     const data = await res.json();
-    askStatus.textContent = "✅";
     const reply = data.choices?.[0]?.message?.content ?? "(no content)";
-
-    document.getElementById('wa-answerHr').classList.remove('d-none');
-    document.getElementById('wa-answerDiv').classList.remove('d-none');
-    document.getElementById('wa-answer').textContent = reply;
+    addWaChatMessage('assistant', reply);
+    waChatHistory.push({role: 'assistant', content: reply});
+    
+    document.getElementById('wa-askStatus').textContent = "✅ Response complete";
+    document.getElementById('wa-promptBox').value = ''; // Clear input
 
   } catch (e) {
-    document.getElementById('wa-askStatus').textContent = "";
-    document.getElementById('wa-error').textContent = "🤖 Chat error: " + e.message;
-    console.error(e);
+    if (e.name === 'AbortError') {
+      document.getElementById('wa-askStatus').textContent = "Generation stopped by user";
+    } else {
+      document.getElementById('wa-askStatus').textContent = "🤖 Chat error: " + e.message;
+      console.error(e);
+    }
+  } finally {
+    // Reset button state
+    const sendText = document.querySelector('#wa-askBtn .send-text');
+    const loadingText = document.querySelector('#wa-askBtn .loading-text');
+    sendText.style.display = 'inline';
+    loadingText.classList.add('d-none');
+    document.getElementById('wa-stopGeneration').classList.add('d-none');
+    waAbortController = null;
   }
 });
 
